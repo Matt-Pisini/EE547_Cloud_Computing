@@ -2,7 +2,7 @@ import subprocess, string
 import pytest
 
 EXEC='python3'
-SCRIPT_TO_TEST='./hw1p1.py'
+SCRIPT_TO_TEST='./hw1_part1.py'
 
 # PROBLEM_ID: STRING
 STRINGS_TO_TEST = [
