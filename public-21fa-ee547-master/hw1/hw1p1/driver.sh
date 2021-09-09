@@ -9,7 +9,7 @@ PYTEST_OPTS="$PYTEST_OPTS --json-report --json-report-file=$REPORT --json-report
 PYTEST_OPTS="$PYTEST_OPTS --suppress-tests-failed-exit-code"
 
 start=`date +%s`
-pytest $PYTEST_OPTS . > "$OUTPUT" 2>&1
+python -m pytest $PYTEST_OPTS . > "$OUTPUT" 2>&1
 #python3 -u hw1p1-soln.py 
 status=$?
 end=`date +%s`
