@@ -17,7 +17,7 @@ const { Process } = require('./process');
 /**************************************/
 
 const INTERPRETER = 'python3';
-const SCRIPT_TO_TEST = `${__dirname}/../hw1p2.py`;
+const SCRIPT_TO_TEST = `${__dirname}/../hw1_part2.py`;
 const DEFAULT_TIMEOUT_MS = 4e3;
 const START_SCRIPT = true;
 

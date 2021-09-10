@@ -68,7 +68,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(open("/tmp/secret.key", "r").read().encode())
             else:
-                self.send_response(400)
+                self.send_response(404)
                 self.end_headers()
                 num_errs += 1
             
