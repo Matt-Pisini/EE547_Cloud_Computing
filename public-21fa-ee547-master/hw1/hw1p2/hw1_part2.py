@@ -42,7 +42,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                     self.end_headers()
                     
                     response_dict = {"p": anagram_string}
-                    response_dict["total"] = int(anagramCount(anagram_string))
+                    response_dict["total"] = str(anagramCount(anagram_string))
                     response_dict["page"] = []
                     temp_list = anagrams(anagram_string)
 
