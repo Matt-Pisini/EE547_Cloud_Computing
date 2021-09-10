@@ -38,39 +38,51 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 anagram_string = query_dict["p"][0]
 
                 if anagram_string.isalpha():    # valid string
-                    limit = 4
-                    if "limit" not in query_dict.keys():
-                        pass
-                    elif not query_dict["limit"][0].isdigit():
-                        self.send_response(400)
-                        num_errs += 1
-                        self.end_headers()
-                        self.wfile.write(b'')
-                        return
-                    else:
-                        if int(query_dict["limit"][0]) > 25:
-                            limit = 25
-                        elif int(query_dict["limit"][0]) < 0:
-                            limit = 0
-                        else:
-                            limit = int(query_dict["limit"][0])
-
-                    self.send_response(200)
-                    self.end_headers()
-                    ana_count = anagramCount(anagram_string)
-                    response_dict = {"p": anagram_string}
-                    response_dict["total"] = str(ana_count)
-                    response_dict["page"] = []
-    
-                    # if "limit" in query_dict.keys():
+                    # if "limit" not in query_dict.keys():
+                    #     pass
+                    # elif not query_dict["limit"][0].isdigit():
+                    #     self.send_response(400)
+                    #     num_errs += 1
+                    #     self.end_headers()
+                    #     self.wfile.write(b'')
+                    #     return
+                    # else:
                     #     if int(query_dict["limit"][0]) > 25:
                     #         limit = 25
                     #     elif int(query_dict["limit"][0]) < 0:
                     #         limit = 0
                     #     else:
                     #         limit = int(query_dict["limit"][0])
-                    # else:
-                    #     limit = 4
+
+                    if "limit" in query_dict.keys():            #'limit' value supplied
+                        if query_dict["limit"][0].isdigit():    #value is valid (i.e. int)
+                            if int(query_dict["limit"][0]) > 25:
+                                limit = 25
+                            elif int(query_dict["limit"][0]) < 0:
+                                limit = 0
+                            else:
+                                limit = int(query_dict["limit"][0])
+                        else:
+                            self.send_response(400)
+                            num_errs += 1
+                            self.end_headers()
+                            self.wfile.write(b'')
+                            return 1
+                    elif "limit" in query:          #nothing supplied, therefore invalid
+                        self.send_response(400)
+                        num_errs += 1
+                        self.end_headers()
+                        self.wfile.write(b'')
+                        return 1
+                    else:
+                        limit = 4
+                        
+                    self.send_response(200)
+                    self.end_headers()
+                    ana_count = anagramCount(anagram_string)
+                    response_dict = {"p": anagram_string}
+                    response_dict["total"] = str(ana_count)
+                    response_dict["page"] = []
                     
                     temp_list = anagrams(anagram_string, limit, ana_count)
                     response_dict["page"] = temp_list
