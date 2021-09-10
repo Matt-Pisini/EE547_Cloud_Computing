@@ -30,7 +30,7 @@ describe('GET /ping', function() {
   });
 });
 
-describe.only('GET /shuffle', function() {
+describe('GET /shuffle', function() {
   const DEFAULT_PATH   = '/shuffle';
   const DEFAULT_METHOD = 'get';
 
@@ -60,12 +60,12 @@ describe.only('GET /shuffle', function() {
       );
     });
     
-    it('count', async function () {
+    it.only('count', async function () {
       const ps = [
         fix.random_string(1),
-        fix.random_string(4),
-        fix.random_string(10),
-        fix.random_string(32)
+        // fix.random_string(4),
+        // fix.random_string(10),
+        // fix.random_string(32)
       ];
 
       return Promise.map(ps, p =>

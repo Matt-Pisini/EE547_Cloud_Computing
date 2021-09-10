@@ -114,7 +114,7 @@ def anagramCount(word):
     count = calcFactorial(anagram_len)
 
     for key, val in letter_dict.items():
-        count = count / calcFactorial(val)
+        count //= calcFactorial(val)
     
     return int(count)
 
