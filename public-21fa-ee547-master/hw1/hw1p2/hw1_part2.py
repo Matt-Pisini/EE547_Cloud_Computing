@@ -29,37 +29,44 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         elif "/shuffle?" in self.path:
             path, _, query = self.path.partition("?")
             query_dict = parse_qs(query)
-            anagram_string = query_dict["p"][0]
-            if anagram_string.isalpha():    # valid string
-                self.send_response(200)
-                self.end_headers()
-                
-                response_dict = {"p": anagram_string}
-                response_dict["total"] = int(anagramCount(anagram_string))
-                response_dict["page"] = []
-                temp_list = anagrams(anagram_string)
-
-                if "limit" in query_dict.keys():
-                    if int(query_dict["limit"][0]) > 25:
-                        limit = 25
-                    elif int(query_dict["limit"][0]) < 0:
-                        limit = 0
-                    else:
-                        limit = int(query_dict["limit"][0])
-                else:
-                    limit = 4
-
-                for cnt, item in enumerate(temp_list):
-                    if cnt == limit:
-                        break
-                    response_dict["page"].append(item)
-                self.wfile.write(json.dumps(response_dict, indent = 4).encode())
-                
-            else:   #invalid string
+            if "p" not in query_dict.keys(): #empty string
                 self.send_response(400)
                 num_errs += 1
                 self.end_headers()
                 self.wfile.write(b'')
+            else:
+                anagram_string = query_dict["p"][0]
+
+                if anagram_string.isalpha():    # valid string
+                    self.send_response(200)
+                    self.end_headers()
+                    
+                    response_dict = {"p": anagram_string}
+                    response_dict["total"] = int(anagramCount(anagram_string))
+                    response_dict["page"] = []
+                    temp_list = anagrams(anagram_string)
+
+                    if "limit" in query_dict.keys():
+                        if int(query_dict["limit"][0]) > 25:
+                            limit = 25
+                        elif int(query_dict["limit"][0]) < 0:
+                            limit = 0
+                        else:
+                            limit = int(query_dict["limit"][0])
+                    else:
+                        limit = 4
+
+                    for cnt, item in enumerate(temp_list):
+                        if cnt == limit:
+                            break
+                        response_dict["page"].append(item)
+                    self.wfile.write(json.dumps(response_dict, indent = 4).encode())
+                    
+                else:   #invalid string
+                    self.send_response(400)
+                    num_errs += 1
+                    self.end_headers()
+                    self.wfile.write(b'')
 
 
         elif self.path == "/secret":
@@ -75,7 +82,6 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         else:
             num_errs += 1
             self.send_response(404)
-        print(num_errs)
         
         
 
