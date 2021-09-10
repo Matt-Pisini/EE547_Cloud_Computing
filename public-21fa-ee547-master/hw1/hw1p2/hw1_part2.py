@@ -44,8 +44,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                     response_dict = {"p": anagram_string}
                     response_dict["total"] = str(anagramCount(anagram_string))
                     response_dict["page"] = []
-                    temp_list = anagrams(anagram_string)
-
+    
                     if "limit" in query_dict.keys():
                         if int(query_dict["limit"][0]) > 25:
                             limit = 25
@@ -56,10 +55,8 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                     else:
                         limit = 4
 
-                    for cnt, item in enumerate(temp_list):
-                        if cnt == limit:
-                            break
-                        response_dict["page"].append(item)
+                    temp_list = anagrams(anagram_string, limit)
+                    response_dict["page"] = temp_list
                     self.wfile.write(json.dumps(response_dict, indent = 4).encode())
                     
                 else:   #invalid string
@@ -85,10 +82,24 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         
         
 
-def anagrams(word):
-    anagram_list = ["".join(perm) for perm in itertools.permutations(word)]
-    anagram_list.sort()
-    return anagram_list
+def anagrams(word, limit):
+    word_sort = ''.join(sorted(word))
+    word_grow = ""
+    anagram_list = []
+    for char in reversed(word_sort):
+        word_grow += char
+        perm_list = ["".join(perm) for perm in itertools.permutations(word_grow)]
+        temp = set(perm_list)
+        anagram_list = list(temp)
+        sorted(anagram_list)
+        if len(anagram_list) >= limit:
+            break
+    
+    prefix = word_sort.replace(word_grow[::-1], '')
+    return_list = []
+    for i in range(limit):
+        return_list.append(prefix + anagram_list[i])
+    return sorted(return_list)
 
 
 def anagramCount(word):
