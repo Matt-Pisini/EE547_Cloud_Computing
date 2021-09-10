@@ -30,7 +30,7 @@ describe('GET /ping', function() {
   });
 });
 
-describe('GET /shuffle', function() {
+describe.only('GET /shuffle', function() {
   const DEFAULT_PATH   = '/shuffle';
   const DEFAULT_METHOD = 'get';
 
