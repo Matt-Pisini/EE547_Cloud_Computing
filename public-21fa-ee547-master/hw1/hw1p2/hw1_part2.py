@@ -1,7 +1,7 @@
 import http.server
 from urllib.parse import parse_qs
 import json
-import datetime
+from datetime import datetime
 import os
 import itertools
 
@@ -23,7 +23,8 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/status":
             self.send_response(200)
             self.end_headers()
-            response_dict = {"time": str(datetime.datetime.now()),"req": num_requests, "err": num_errs}
+            # time = datetime.datetime.utcnow()
+            response_dict = {"time": datetime.utcnow().replace(microsecond=0).astimezone().isoformat(),"req": num_requests, "err": num_errs}
             self.wfile.write(json.dumps(response_dict, indent = 4).encode())
         
         elif "/shuffle?" in self.path:
@@ -37,25 +38,9 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             else:
                 anagram_string = query_dict["p"][0]
 
-                if anagram_string.isalpha():    # valid string
-                    # if "limit" not in query_dict.keys():
-                    #     pass
-                    # elif not query_dict["limit"][0].isdigit():
-                    #     self.send_response(400)
-                    #     num_errs += 1
-                    #     self.end_headers()
-                    #     self.wfile.write(b'')
-                    #     return
-                    # else:
-                    #     if int(query_dict["limit"][0]) > 25:
-                    #         limit = 25
-                    #     elif int(query_dict["limit"][0]) < 0:
-                    #         limit = 0
-                    #     else:
-                    #         limit = int(query_dict["limit"][0])
-
+                if anagram_string.isalpha():                    # valid string
                     if "limit" in query_dict.keys():            #'limit' value supplied
-                        if query_dict["limit"][0].isdigit():    #value is valid (i.e. int)
+                        if query_dict["limit"][0].isdigit():    # value is valid (i.e. int)
                             if int(query_dict["limit"][0]) > 25:
                                 limit = 25
                             elif int(query_dict["limit"][0]) < 0:
@@ -68,7 +53,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                             self.end_headers()
                             self.wfile.write(b'')
                             return 1
-                    elif "limit" in query:          #nothing supplied, therefore invalid
+                    elif "limit" in query:                       # nothing supplied, therefore invalid
                         self.send_response(400)
                         num_errs += 1
                         self.end_headers()
