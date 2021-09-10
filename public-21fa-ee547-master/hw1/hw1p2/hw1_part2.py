@@ -105,7 +105,7 @@ def anagramCount(word):
     for key, val in letter_dict.items():
         count = count / calcFactorial(val)
     
-    return count
+    return int(count)
 
 def calcFactorial(x):
     factorial = 1
