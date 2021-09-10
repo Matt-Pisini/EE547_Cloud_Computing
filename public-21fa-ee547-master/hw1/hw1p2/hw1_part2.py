@@ -91,10 +91,10 @@ def anagrams(word, limit):
         perm_list = ["".join(perm) for perm in itertools.permutations(word_grow)]
         temp = set(perm_list)
         anagram_list = list(temp)
-        sorted(anagram_list)
+        anagram_list = sorted(anagram_list)
         if len(anagram_list) >= limit:
             break
-    
+    print(anagram_list)
     prefix = word_sort.replace(word_grow[::-1], '')
     return_list = []
     for i in range(limit):
