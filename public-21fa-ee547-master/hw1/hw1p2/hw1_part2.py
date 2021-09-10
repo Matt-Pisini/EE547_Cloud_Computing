@@ -96,7 +96,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         else:
             num_errs += 1
             self.send_response(404)
-        
+            self.end_headers()
         
 
 def anagrams(word, limit, count):

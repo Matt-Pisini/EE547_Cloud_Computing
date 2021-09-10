@@ -126,7 +126,7 @@ describe('GET /shuffle', function() {
       expect(page).to.be.deep.equal(fix.anagram_page(p, DEFAULT_PAGE_LENGTH));
     });
     
-    it.only('require integer', async function () {
+    it('require integer', async function () {
       const p = fix.random_string(12);
 
       const limits = [
