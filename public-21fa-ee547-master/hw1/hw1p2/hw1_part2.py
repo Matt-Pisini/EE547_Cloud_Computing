@@ -55,7 +55,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                     else:
                         limit = 4
 
-                    temp_list = anagrams(anagram_string, limit, count)
+                    temp_list = anagrams(anagram_string, limit, ana_count)
                     response_dict["page"] = temp_list
                     self.wfile.write(json.dumps(response_dict, indent = 4).encode())
                     
