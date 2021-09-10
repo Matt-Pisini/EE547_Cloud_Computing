@@ -55,6 +55,7 @@ def count_anagrams(s):
   hist = [0] * 26
   for k, letter in enumerate(string.ascii_lowercase):
     hist[k] = s.count(letter)
+  # print(hist)
 
   # multinomial log-implementation
   perm1 = factorial(sum(hist))
