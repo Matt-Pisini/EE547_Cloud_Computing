@@ -40,9 +40,9 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 if anagram_string.isalpha():    # valid string
                     self.send_response(200)
                     self.end_headers()
-                    
+                    ana_count = anagramCount(anagram_string)
                     response_dict = {"p": anagram_string}
-                    response_dict["total"] = str(anagramCount(anagram_string))
+                    response_dict["total"] = str(ana_count)
                     response_dict["page"] = []
     
                     if "limit" in query_dict.keys():
@@ -55,7 +55,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                     else:
                         limit = 4
 
-                    temp_list = anagrams(anagram_string, limit)
+                    temp_list = anagrams(anagram_string, limit, count)
                     response_dict["page"] = temp_list
                     self.wfile.write(json.dumps(response_dict, indent = 4).encode())
                     
@@ -82,7 +82,10 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         
         
 
-def anagrams(word, limit):
+def anagrams(word, limit, count):
+    if count < limit:
+        perm_list = ["".join(perm) for perm in itertools.permutations(word)]
+        return sorted(perm_list)
     word_sort = ''.join(sorted(word))
     word_grow = ""
     anagram_list = []
