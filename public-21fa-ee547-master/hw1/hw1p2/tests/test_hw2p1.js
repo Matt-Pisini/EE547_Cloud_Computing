@@ -60,12 +60,12 @@ describe('GET /shuffle', function() {
       );
     });
     
-    it.only('count', async function () {
+    it('count', async function () {
       const ps = [
         fix.random_string(1),
-        // fix.random_string(4),
-        // fix.random_string(10),
-        // fix.random_string(32)
+        fix.random_string(4),
+        fix.random_string(10),
+        fix.random_string(32)
       ];
 
       return Promise.map(ps, p =>
@@ -126,7 +126,7 @@ describe('GET /shuffle', function() {
       expect(page).to.be.deep.equal(fix.anagram_page(p, DEFAULT_PAGE_LENGTH));
     });
     
-    it('require integer', async function () {
+    it.only('require integer', async function () {
       const p = fix.random_string(12);
 
       const limits = [

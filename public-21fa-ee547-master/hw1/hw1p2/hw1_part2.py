@@ -34,6 +34,13 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 num_errs += 1
                 self.end_headers()
                 self.wfile.write(b'')
+            elif "limit" not in query_dict.keys():
+                limit = 4
+            elif not isinstance(query_dict["limit"],int):
+                self.send_response(400)
+                num_errs += 1
+                self.end_headers()
+                self.wfile.write(b'')
             else:
                 anagram_string = query_dict["p"][0]
 
@@ -45,15 +52,21 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                     response_dict["total"] = str(ana_count)
                     response_dict["page"] = []
     
-                    if "limit" in query_dict.keys():
-                        if int(query_dict["limit"][0]) > 25:
-                            limit = 25
-                        elif int(query_dict["limit"][0]) < 0:
-                            limit = 0
-                        else:
-                            limit = int(query_dict["limit"][0])
+                    # if "limit" in query_dict.keys():
+                    #     if int(query_dict["limit"][0]) > 25:
+                    #         limit = 25
+                    #     elif int(query_dict["limit"][0]) < 0:
+                    #         limit = 0
+                    #     else:
+                    #         limit = int(query_dict["limit"][0])
+                    # else:
+                    #     limit = 4
+                    if int(query_dict["limit"][0]) > 25:
+                        limit = 25
+                    elif int(query_dict["limit"][0]) < 0:
+                        limit = 0
                     else:
-                        limit = 4
+                        limit = int(query_dict["limit"][0])
 
                     temp_list = anagrams(anagram_string, limit, ana_count)
                     response_dict["page"] = temp_list
