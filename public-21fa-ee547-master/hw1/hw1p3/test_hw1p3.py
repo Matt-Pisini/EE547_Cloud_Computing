@@ -1,7 +1,7 @@
 import boto3, csv
 import pytest
 
-CSV_TO_TEST='./hw1p3.csv'
+CSV_TO_TEST='./new_user_credentials.csv'
 
 AWS_USER='ee547-grader-user'
 AWS_POLICY='ee547-grader-policy'
