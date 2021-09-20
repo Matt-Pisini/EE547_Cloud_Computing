@@ -2,14 +2,16 @@
     "players": [
     {
         "pid": 1,
-        "name": "Matt Pisini",
+        "fname": "Matt",
+        "lname": "Pisini",
         "handed": "r",
         "is_active": 1,
         "balance_usd": 100
     },
     {
         "pid": 2,
-        "name": "bob dude",
+        "fname": "bob",
+        "lname": "dude",
         "handed": "r",
         "is_active": 1,
         "balance_usd": 100
