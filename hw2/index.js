@@ -69,8 +69,8 @@ function getActivePlayers() {
         const active_players = [];
         for(let i = 0; i < players.length; i++) {
             if(players[i].is_active == 1 || players[i].is_active == 't' || players[i].is_active == true) {
-                active_players.push(players[i]);
-                // active_players.push(formatPlayer(players[i]));
+                // active_players.push(players[i]);
+                active_players.push(formatPlayer(players[i]));
             }
         }
         return active_players;
@@ -93,29 +93,6 @@ function getPlayer(id) {
     }
 }
 // *********************************************************************************
-
-function formatPlayer(player){
-    if(player.lname){
-        let player_output = {
-            pid: player.pid,
-            name: player.fname + ' ' + player.lname,
-            handed: player.handed,
-            is_active: player.is_active,
-            balance_usd: player.balance_usd
-        }
-        return player_output;
-    }
-    else {  //"lname" does not exist so dont add it to "name"
-        let player_output = {
-            pid: player.pid,
-            name: player.fname,
-            handed: player.handed,
-            is_active: player.is_active,
-            balance_usd: player.balance_usd
-        }
-        return player_output;
-    }
-}
 
 // ***************************** DELETE FUNCTIONS ***********************************
 // If player exists, deletes player from JSON object and rewrites file; else returns undefined.
@@ -144,24 +121,137 @@ function deletePlayer(id) {
 
 // ***************************** POST FUNCTIONS ***********************************
 function addPlayer(params){
-    console.log(params);
+    // console.log(params);
+    let invalid_fields = [];
     if(Object.keys(params).length == 0){ //Empty
+        console.log("empty");
+        //what is considered wrong for blank string
+        // invalid_fields.push();
         return 0;
     }
     else {
-        if(params.handed.toLowerCase() != 'left' || params.handed.toLowerCase() != 'right' || params.handed.toLowerCase() != 'ambi'){
-            return 0;
+        if(params.handed.toLowerCase() != 'left' && params.handed.toLowerCase() != 'right' && params.handed.toLowerCase() != 'ambi'){
+            console.log("handed");
+            invalid_fields.push("handed");
         }
-        if(!/[^a-z]/i.test(params.fname) || !/[^a-z]/i.test(params.lname)){
-            return 0;
+        if(/[^a-z]/i.test(params.fname)){
+            console.log("fname");
+            invalid_fields.push("fname");
         }
+        if(/[^a-z]/i.test(params.lname)){
+            console.log("lname");
+            invalid_fields.push("lname");
+        }
+
+        let balance_value = checkBalanceFormat(params.initial_balance_usd);
+        console.log(balance_value);
+        if (balance_value == undefined){
+            invalid_fields.push("initial_balance_usd");
+        }
+        // let money = params.initial_balance_usd.split(".");
+        // if(/[^0-9]/i.test(money[0])){
+        //     console.log("balance_usd");
+        //     invalid_fields.push("initial_balance_usd");
+        // }
+        // if(money[1] != undefined){
+        //     if(money[1].length > 2){
+        //         invalid_fields.push("initial_balance_usd");
+        //     }
+        //     else if (/[^0-9]/i.test(money[1])){
+        //         invalid_fields.push("initial_balance_usd");
+        //     }
+        // }
+
+        if(invalid_fields.length > 0){ //there was some error
+            return invalid_fields;
+        }
+
+        // //format initial_balance_usd
+        // let balance = 0;
+        // if(money[1] == undefined){
+        //     balance = money[0] + ".00";
+        // }
+        // else if (money[1].length == 1){
+        //     balance = money[0] + "." + money[1] + "0";
+        // }
+        // else {
+        //     balance = money[0] + "." + money[1];
+        // }
         
+        let new_player = {
+            pid: 10,            //how to add pid??
+            fname: params.fname,
+            lname: params.lname,
+            handed: params.handed,
+            is_active: params.is_active,
+            balance_usd: balance_value
+        }
+        let json_file = openFile();
+        json_file.players.push(new_player);
+        reWriteFile(json_file);
+        return invalid_fields;
 
     }
 }
 
 function updatePlayer(id){
     console.log(id);
+}
+// *********************************************************************************
+
+// ***************************** OTHER FUNCTIONS ***********************************
+
+function formatPlayer(player){
+    if(player.lname){
+        let player_output = {
+            pid: player.pid,
+            name: player.fname + ' ' + player.lname,
+            handed: player.handed,
+            is_active: player.is_active,
+            balance_usd: player.balance_usd
+        }
+        return player_output;
+    }
+    else {  //"lname" does not exist so dont add it to "name"
+        let player_output = {
+            pid: player.pid,
+            name: player.fname,
+            handed: player.handed,
+            is_active: player.is_active,
+            balance_usd: player.balance_usd
+        }
+        return player_output;
+    }
+}
+
+function checkBalanceFormat(balance){
+
+    let money = balance.split(".");
+    if(/[^0-9]/i.test(money[0])){
+        console.log("balance_usd");
+        return undefined
+    }
+    if(money[1] != undefined){
+        if(money[1].length > 2){
+            return undefined;
+        }
+        else if (/[^0-9]/i.test(money[1])){
+            return undefined;
+        }
+    }
+
+    //format initial_balance_usd
+    let balance_value = 0;
+    if(money[1] == undefined){
+        balance_value = money[0] + ".00";
+    }
+    else if (money[1].length == 1){
+        balance_value = money[0] + "." + money[1] + "0";
+    }
+    else {
+        balance_value = money[0] + "." + money[1];
+    }
+    return balance_value;
 }
 // ***********************************************************************************
 
@@ -213,7 +303,7 @@ app.delete('/player/:pid', (req,res,next) => {
     }
     else{
         res.writeHead(200);
-        res.redirect(`http://${HOST}:${PORT}/player`);
+        res.redirect(303, `http://${HOST}:${PORT}/player`);
         res.end();
     }
     next();
@@ -222,12 +312,13 @@ app.delete('/player/:pid', (req,res,next) => {
 // POST FUNCTIONS
 app.post('/player', (req,res,next) => {
     let response = addPlayer(req.query);
-    if(response){
-        res.redirect(`http://${HOST}:${PORT}/player/`);
+    if(response.length == 0){
+        res.redirect(303, `http://${HOST}:${PORT}/player/`);
         res.end();
     }
     else{
         res.writeHead(422);
+        res.write(response);
         res.end();
     }
     next();
