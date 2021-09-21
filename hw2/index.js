@@ -8,6 +8,10 @@ const app = express();
 const PORT = 3000;
 const HOST = 'localhost';
 
+
+let next_pid = getNextPID();
+console.log(`NEXT PID: ${next_pid}`);
+
 // ***************************** FILE WRITING **************************************
 // Updates the player.json file when any changes occur
 function reWriteFile(file_obj) {
@@ -49,6 +53,7 @@ function getPlayers() {
     try{
         let players = openFile();
         players = players.players;
+        console.log(players);
         players.sort(function(a,b) {
             var nameA = a.fname.toUpperCase();
             var nameB = b.fname.toUpperCase();
@@ -121,7 +126,6 @@ function deletePlayer(id) {
 
 // ***************************** POST FUNCTIONS ***********************************
 function addPlayer(params){
-    // console.log(params);
     let invalid_fields = [];
     if(Object.keys(params).length == 0){ //Empty
         console.log("empty");
@@ -148,44 +152,20 @@ function addPlayer(params){
         if (balance_value == undefined){
             invalid_fields.push("initial_balance_usd");
         }
-        // let money = params.initial_balance_usd.split(".");
-        // if(/[^0-9]/i.test(money[0])){
-        //     console.log("balance_usd");
-        //     invalid_fields.push("initial_balance_usd");
-        // }
-        // if(money[1] != undefined){
-        //     if(money[1].length > 2){
-        //         invalid_fields.push("initial_balance_usd");
-        //     }
-        //     else if (/[^0-9]/i.test(money[1])){
-        //         invalid_fields.push("initial_balance_usd");
-        //     }
-        // }
 
         if(invalid_fields.length > 0){ //there was some error
             return invalid_fields;
         }
-
-        // //format initial_balance_usd
-        // let balance = 0;
-        // if(money[1] == undefined){
-        //     balance = money[0] + ".00";
-        // }
-        // else if (money[1].length == 1){
-        //     balance = money[0] + "." + money[1] + "0";
-        // }
-        // else {
-        //     balance = money[0] + "." + money[1];
-        // }
         
         let new_player = {
-            pid: 10,            //how to add pid??
+            pid: next_pid,            //how to add pid??
             fname: params.fname,
             lname: params.lname,
             handed: params.handed,
             is_active: params.is_active,
             balance_usd: balance_value
         }
+        next_pid++;
         let json_file = openFile();
         json_file.players.push(new_player);
         reWriteFile(json_file);
@@ -194,8 +174,22 @@ function addPlayer(params){
     }
 }
 
-function updatePlayer(id){
+function updatePlayer(id, query){
     console.log(id);
+    console.log(query);
+    if(query.active == 1 || query.active.toLowerCase() == "t" || query.active.toLowerCase() == "true"){
+
+    }
+    else {
+
+    }
+    let players = getPlayers();
+    for(let i = 0; i < players.length; i++){
+        if(players[i].pid == id) {
+
+        }
+    }
+
 }
 // *********************************************************************************
 
@@ -253,6 +247,18 @@ function checkBalanceFormat(balance){
     }
     return balance_value;
 }
+
+function formatBalance(){
+    
+}
+
+function getNextPID(){
+    let initial_players = getPlayers();
+    if (initial_players.length == 0){
+        return 1; //start at index 1 bc no players are in JOSN file
+    }
+    return Math.max(...initial_players.map(({pid}) => pid)) + 1;
+}
 // ***********************************************************************************
 
 // ***************************** EXPRESS ENDPOINTS ***********************************
@@ -302,7 +308,6 @@ app.delete('/player/:pid', (req,res,next) => {
         res.end();
     }
     else{
-        res.writeHead(200);
         res.redirect(303, `http://${HOST}:${PORT}/player`);
         res.end();
     }
@@ -325,8 +330,7 @@ app.post('/player', (req,res,next) => {
 });
 
 app.post('/player/:pid', (req,res,next) => {
-    console.log(req.query);
-    updatePlayer(req.query);
+    updatePlayer(req.params, req.query);
     res.writeHead(200);
     res.write('');
     res.end();
