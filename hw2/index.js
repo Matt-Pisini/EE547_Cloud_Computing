@@ -9,7 +9,7 @@ const PORT = 3000;
 const HOST = 'localhost';
 
 
-let next_pid = getNextPID();
+let next_pid = getStartingPID();
 console.log(`NEXT PID: ${next_pid}`);
 
 // ***************************** FILE WRITING **************************************
@@ -53,7 +53,6 @@ function getPlayers() {
     try{
         let players = openFile();
         players = players.players;
-        console.log(players);
         players.sort(function(a,b) {
             var nameA = a.fname.toUpperCase();
             var nameB = b.fname.toUpperCase();
@@ -75,7 +74,7 @@ function getActivePlayers() {
         for(let i = 0; i < players.length; i++) {
             if(players[i].is_active == 1 || players[i].is_active == 't' || players[i].is_active == true) {
                 // active_players.push(players[i]);
-                active_players.push(formatPlayer(players[i]));
+                active_players.push(formatPlayerOutput(players[i]));
             }
         }
         return active_players;
@@ -89,7 +88,7 @@ function getPlayer(id) {
         let players = getPlayers();
         for(let i = 0; i < players.length; i++){
             if(players[i].pid == id){
-                return formatPlayer(players[i]);
+                return formatPlayerOutput(players[i]);
             }
         }
         return undefined;
@@ -127,114 +126,147 @@ function deletePlayer(id) {
 // ***************************** POST FUNCTIONS ***********************************
 function addPlayer(params){
     let invalid_fields = [];
-    if(Object.keys(params).length == 0){ //Empty
-        console.log("empty");
-        //what is considered wrong for blank string
-        // invalid_fields.push();
-        return 0;
+    // Check handedness
+    if(params.handed == undefined){
+        console.log("handed");
+        invalid_fields.push("handed");
     }
-    else {
-        if(params.handed.toLowerCase() != 'left' && params.handed.toLowerCase() != 'right' && params.handed.toLowerCase() != 'ambi'){
-            console.log("handed");
-            invalid_fields.push("handed");
-        }
-        if(/[^a-z]/i.test(params.fname)){
-            console.log("fname");
-            invalid_fields.push("fname");
-        }
-        if(/[^a-z]/i.test(params.lname)){
-            console.log("lname");
-            invalid_fields.push("lname");
-        }
+    else if(params.handed.toLowerCase() != 'left' && params.handed.toLowerCase() != 'right' && params.handed.toLowerCase() != 'ambi'){
+        console.log("handed");
+        invalid_fields.push("handed");
+    }
+    // Check first name
+    if(params.fname == undefined){
+        console.log("fname");
+        invalid_fields.push("fname");
+    }
+    else if(!validateName(params.fname) || params.fname == ""){
+        console.log("fname");
+        invalid_fields.push("fname");
+    }
 
-        let balance_value = checkBalanceFormat(params.initial_balance_usd);
-        console.log(balance_value);
-        if (balance_value == undefined){
-            invalid_fields.push("initial_balance_usd");
-        }
+    // Check last name (can be blank)
+    if(!validateName(params.lname)){
+        console.log("lname");
+        invalid_fields.push("lname");
+    }
+    
+    // Check initial Balance
+    if (!validateInitialBalanceInput(params.initial_balance_usd)){
+        invalid_fields.push("initial_balance_usd");
+    }
 
-        if(invalid_fields.length > 0){ //there was some error
-            return invalid_fields;
-        }
-        
-        let new_player = {
-            pid: next_pid,            //how to add pid??
-            fname: params.fname,
-            lname: params.lname,
-            handed: params.handed,
-            is_active: params.is_active,
-            balance_usd: balance_value
-        }
-        next_pid++;
-        let json_file = openFile();
-        json_file.players.push(new_player);
-        reWriteFile(json_file);
+    // Invalid Fields
+    if(invalid_fields.length > 0){ 
         return invalid_fields;
-
     }
+
+    let new_player = formatPlayerData(params);
+    let json_file = openFile();
+    json_file.players.push(new_player);
+    reWriteFile(json_file);
+    next_pid++; //do last to ensure no errors occurred
+    return invalid_fields;
+
 }
 
 function updatePlayer(id, query){
-    console.log(id);
-    console.log(query);
+    let active = 0;
     if(query.active == 1 || query.active.toLowerCase() == "t" || query.active.toLowerCase() == "true"){
-
+        active = 1;
     }
-    else {
 
-    }
-    let players = getPlayers();
-    for(let i = 0; i < players.length; i++){
-        if(players[i].pid == id) {
-
+    let name_change_flag = 0;
+    if(query.lname != undefined){
+        if(validateName(query.lname)){
+            name_change_flag = 1;
+        }
+        else{
+            return 0; //invalid lname field
         }
     }
 
+    let DNE_flag = 0;
+    let json_file = openFile();
+    for(let i = 0; i < json_file.players.length; i++){
+        if(json_file.players[i].pid == id) {
+            DNE_flag = 1;
+            json_file.players[i].is_active = active;
+            if (name_change_flag){
+                json_file.players[i].lname = query.lname;
+            }
+        }
+    }
+    if(DNE_flag){
+        reWriteFile(json_file);
+        return 1;
+    }
+    
+    return 0;
 }
 // *********************************************************************************
 
-// ***************************** OTHER FUNCTIONS ***********************************
+// ***************************** FORMAT FUNCTIONS ***********************************
+function formatPlayerData(params){
 
-function formatPlayer(player){
-    if(player.lname){
-        let player_output = {
-            pid: player.pid,
-            name: player.fname + ' ' + player.lname,
-            handed: player.handed,
-            is_active: player.is_active,
-            balance_usd: player.balance_usd
-        }
-        return player_output;
+    let hand = '';
+    if(params.handed.toLowerCase() == "left"){
+        hand = "L";
     }
-    else {  //"lname" does not exist so dont add it to "name"
-        let player_output = {
-            pid: player.pid,
-            name: player.fname,
-            handed: player.handed,
-            is_active: player.is_active,
-            balance_usd: player.balance_usd
-        }
-        return player_output;
+    else if(params.handed.toLowerCase() == "right"){
+        hand = "R";
     }
+    else{
+        hand = "A";
+    }
+
+    let balance_value = formatInitialBalance(params.initial_balance_usd);
+
+    let new_player = {
+        pid: next_pid,            
+        fname: params.fname,
+        lname: params.lname,
+        handed: hand,
+        is_active: 1,
+        balance_usd: balance_value
+    }
+    
+    return new_player;
 }
 
-function checkBalanceFormat(balance){
+function formatPlayerOutput(player){
+    let hand = '';
+    if(player.handed == "L"){
+        hand = "left";
+    }
+    else if(player.handed == "R"){
+        hand = "right";
+    }
+    else{
+        hand = "ambi";
+    }
 
+    let name = '';
+    if(player.lname){
+        name = player.fname + ' ' + player.lname;
+    }
+    else {  
+        name = player.fname;
+    }
+
+    let player_output = {
+        pid: player.pid,
+        name: name,
+        handed: hand,
+        is_active: player.is_active,
+        balance_usd: player.balance_usd
+    }
+
+    return player_output;
+}
+
+function formatInitialBalance(balance){
     let money = balance.split(".");
-    if(/[^0-9]/i.test(money[0])){
-        console.log("balance_usd");
-        return undefined
-    }
-    if(money[1] != undefined){
-        if(money[1].length > 2){
-            return undefined;
-        }
-        else if (/[^0-9]/i.test(money[1])){
-            return undefined;
-        }
-    }
-
-    //format initial_balance_usd
     let balance_value = 0;
     if(money[1] == undefined){
         balance_value = money[0] + ".00";
@@ -247,12 +279,37 @@ function checkBalanceFormat(balance){
     }
     return balance_value;
 }
+// ***********************************************************************************
 
-function formatBalance(){
-    
+// ***************************** OTHER FUNCTIONS ***********************************
+
+function validateInitialBalanceInput(balance){
+    if(balance == undefined){
+        return 0;
+    }
+    let money = balance.split(".");
+    if(/[^0-9]/i.test(money[0])){
+        return 0;
+    }
+    if(money[1] != undefined){
+        if(money[1].length > 2){
+            return 0;
+        }
+        else if (/[^0-9]/i.test(money[1])){
+            return 0;
+        }
+    }
+    return 1;
 }
 
-function getNextPID(){
+function validateName(name){
+    if(/[^a-z]/i.test(name)){
+        return 0;
+    }
+    return 1;
+}
+
+function getStartingPID(){
     let initial_players = getPlayers();
     if (initial_players.length == 0){
         return 1; //start at index 1 bc no players are in JOSN file
@@ -323,17 +380,23 @@ app.post('/player', (req,res,next) => {
     }
     else{
         res.writeHead(422);
-        res.write(response);
+        res.write("invalid fields: " + response.join(", "));
         res.end();
     }
     next();
 });
 
 app.post('/player/:pid', (req,res,next) => {
-    updatePlayer(req.params, req.query);
-    res.writeHead(200);
-    res.write('');
-    res.end();
+    let valid = updatePlayer(req.params.pid, req.query);
+    if(valid){
+        res.redirect(303, `http://${HOST}:${PORT}/player/${req.params.pid}`);
+        res.end();
+    }
+    else{
+        res.writeHead(404);
+        res.end();
+    }
+    
     next();
 });
 

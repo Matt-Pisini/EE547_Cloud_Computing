@@ -1,1 +1,1 @@
-{"players":[],"update_at":"2021-09-21T20:49:51.515Z","create_at":"2021-09-21T20:49:51.515Z","version":1}
+{"players":[{"pid":1,"fname":"Matt","lname":"","handed":"R","is_active":0,"balance_usd":100},{"pid":2,"fname":"bob","lname":"dude","handed":"R","is_active":1,"balance_usd":100}],"update_at":"2021-09-22T02:01:58.371Z","create_at":"now","version":"1.0"}
