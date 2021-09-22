@@ -1,1 +1,1 @@
-{"players":[{"pid":1,"fname":"Matt","lname":"","handed":"R","is_active":0,"balance_usd":100},{"pid":2,"fname":"bob","lname":"dude","handed":"R","is_active":1,"balance_usd":100}],"update_at":"2021-09-22T02:01:58.371Z","create_at":"now","version":"1.0"}
+{"players":[{"pid":2,"fname":"matt","lname":"Pisini","handed":"R","is_active":true,"balance_usd":".00"}],"update_at":"2021-09-22T18:38:14.265Z","create_at":"now","version":"1.0"}
