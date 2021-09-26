@@ -29,7 +29,6 @@ function openFile() {
         let json_file = JSON.parse(data);
         return json_file;
     } catch(err){
-        console.log(err);
         let json_file = createFile();
         return json_file; // return empty JSON object
     }
@@ -329,11 +328,16 @@ function validateName(name){
 }
 
 function getStartingPID(){
-    let initial_players = getPlayers();
-    if (initial_players.length == 0){
-        return 1; //start at index 1 bc no players are in JOSN file
+    try {
+        let initial_players = getPlayers();
+        if (initial_players.length == 0){
+            return 1; //start at index 1 bc no players are in JOSN file
+        }
+        return Math.max(...initial_players.map(({pid}) => pid)) + 1;
+    } catch(err){
+        console.log(err);
     }
-    return Math.max(...initial_players.map(({pid}) => pid)) + 1;
+    
 }
 // function verifyPlayerExists(id){
 //     let json_file = openFile();
@@ -358,6 +362,7 @@ app.get('/ping', (req, res, next) => {
 });
 
 app.get('/player', (req,res,next) => {
+    console.log("here");
     try{
         let players = getActivePlayers();
         if(players == undefined){
@@ -404,7 +409,8 @@ app.delete('/player/:pid', (req,res,next) => {
 app.post('/player', (req,res,next) => {
     let response = addPlayer(req.query);
     if(response.length == 0){
-        res.redirect(303, `http://${HOST}:${PORT}/player/`);
+        res.redirect(303, `http://${HOST}:${PORT}/player`);
+        // res.redirect(303, '/');
         res.end();
     }
     else{

@@ -4,7 +4,7 @@
   "description": "Autograder scripts for EE 547, Fall 2021, HW1: problem 2",
   "main": "index.js",
   "scripts": {
-    "test": "mocha tests/test_*.js --reporter lib/autolab-reporter.js"
+    "test": "mocha tests/test_player_get.js --reporter lib/autolab-reporter.js"
   },
   "author": "Brandon Franzke <franzke@usc.edu>",
   "license": "ISC",

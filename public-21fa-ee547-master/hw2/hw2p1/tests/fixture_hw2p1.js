@@ -136,6 +136,7 @@ class Hw2P1Fixture extends Fixture {
   // return pid
   async add_player(data = {}) {
     data = this._add_player_defs(data);
+    console.log(data);
     
     await this.stop();
 
