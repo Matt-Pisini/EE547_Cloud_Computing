@@ -136,12 +136,11 @@ class Hw2P1Fixture extends Fixture {
   // return pid
   async add_player(data = {}) {
     data = this._add_player_defs(data);
-    console.log(data);
     
     await this.stop();
 
     const db = this._db_load();
-
+  
     if (!('pid' in data)) {      
       data.pid = this._get_free_id(db.players);
     }

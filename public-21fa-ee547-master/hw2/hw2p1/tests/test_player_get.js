@@ -229,13 +229,13 @@ describe('GET /player/:pid', function() {
       return fix.test_succeed(DEFAULT_METHOD, DEFAULT_PATH(pid), {}, 200, ['handed']); 
     });
     
-    it.only('handed enum', async () => {
+    it('handed enum', async () => {
       const vals = ['left', 'right', 'ambi'];
 
       return Promise.map(vals, async val => {
-        console.log(val);
+
         const pid = await fix.add_player({ handed: val });
-        console.log(pid);
+        
         return fix.test_succeed(DEFAULT_METHOD, DEFAULT_PATH(pid), {}, 200, { handed: val });
       });
     });
