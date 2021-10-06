@@ -2,7 +2,7 @@
   "name": "ee547-213-hw1p2",
   "version": "0.1.0",
   "description": "Autograder scripts for EE 547, Fall 2021, HW1: problem 2",
-  "main": "index.js",
+  "main": "hw2p1.js",
   "scripts": {
     "test": "mocha tests/test_*.js --reporter lib/autolab-reporter.js"
   },
@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "express": "^4.17.1",
+    "nodemon": "^2.0.13",
     "wtfnode": "^0.8.4"
   }
 }
