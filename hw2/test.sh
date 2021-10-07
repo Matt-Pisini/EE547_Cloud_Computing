@@ -11,9 +11,9 @@ function url() {
 
 # curl $CURL_OPTS -X POST $(url "/player?fname=&lname=")
 # curl $CURL_OPTS -X POST $(url "/player?fname=9matt&lname=pisini&handed=right&initial_balance_usd=100")
-# curl $CURL_OPTS -X POST $(url "/player?fname=matt&lname=0pisini&handed=right&initial_balance_usd=100")
+curl $CURL_OPTS -X POST $(url "/player?fname=1matt&lname=0pisini&handed=right&initial_balance_usd=100")
 # curl $CURL_OPTS -X POST $(url "/player?fname=matt&lname=Pisini&handed=right&initial_balance_usd=10.13")
-curl $CURL_OPTS -X POST $(url "/player?fname=matt&lname=Pisini&handed=right&initial_balance_usd=0")
+# curl $CURL_OPTS -X POST $(url "/player?fname=matt&lname=Pisini&handed=right&initial_balance_usd=0")
 
 # curl $CURL_OPTS -X POST $(url "/player/1?active=0")
 # curl $CURL_OPTS -X POST $(url "/player/1?active=1&lname=76yh")

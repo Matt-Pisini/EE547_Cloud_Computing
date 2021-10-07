@@ -3,15 +3,14 @@
 const { json } = require("express");
 const express = require("express");
 const fs = require('fs');
+const { exit } = require("process");
 const app = express();
 
 const PORT = 3000;
-const HOST = 'localhost';
+const MONGO_HOST = '192.168.0.18';
 const DATA_PATH = './data/player.json';
+const MONGO_DATA_PATH = './config/mongo.json';
 
-
-let next_pid = getStartingPID();
-console.log(`NEXT PID: ${next_pid}`);
 
 // ***************************** FILE WRITING **************************************
 // Updates the player.json file when any changes occur
@@ -113,8 +112,8 @@ function deletePlayer(id) {
 // ***************************** POST FUNCTIONS ***********************************
 class Post {
     new_player(params){
-        console.log(params);
         let invalid_fields = [];
+        let new_player = {};
         // Check handedness
         if(params.handed == undefined){
             console.log("handed");
@@ -147,15 +146,15 @@ class Post {
     
         // Invalid Fields
         if(invalid_fields.length > 0){ 
-            return invalid_fields;
+            return {invalid_fields, new_player};
         }
     
-        let new_player = form.player(params);
-        let json_file = openFile();
-        json_file.players.push(new_player);
-        reWriteFile(json_file);
-        next_pid++; //do last to ensure no errors occurred
-        return invalid_fields;
+        new_player = form.player(params);
+        // let json_file = openFile();
+        // json_file.players.push(new_player);
+        // reWriteFile(json_file);
+        // next_pid++; //do last to ensure no errors occurred
+        return {invalid_fields,new_player};
     }
 
     update_player(id, query){
@@ -297,8 +296,7 @@ class Formatter {
     
         let balance_value = decor.balance(params.initial_balance_usd);
     
-        let new_player = {
-            pid: next_pid,            
+        let new_player = {            
             fname: params.fname,
             lname: params.lname,
             handed: hand,
@@ -351,16 +349,16 @@ const v = new Validator();
 
 // ***************************** OTHER FUNCTIONS ***********************************
 
-function getStartingPID(){
-    if(fs.existsSync(DATA_PATH)){
-        let initial_players = getPlayers();
-        if (initial_players.length == 0){
-            return 1; //start at index 1 bc no players are in JOSN file
-        }
-        return Math.max(...initial_players.map(({pid}) => pid)) + 1;
-    }
-    return 1;
-}
+// function getStartingPID(){
+//     if(fs.existsSync(DATA_PATH)){
+//         let initial_players = getPlayers();
+//         if (initial_players.length == 0){
+//             return 1; //start at index 1 bc no players are in JOSN file
+//         }
+//         return Math.max(...initial_players.map(({pid}) => pid)) + 1;
+//     }
+//     return 1;
+// }
 
 function alphabetizePlayers(players){
     players.sort(function(a,b) {
@@ -436,19 +434,24 @@ app.delete('/player/:pid', (req,res,next) => {
 });
 
 // POST FUNCTIONS
-app.post('/player', (req,res,next) => {
-    let response = p.new_player(req.query);
-    let pid = next_pid - 1;
-    if(response.length == 0){
-        res.redirect(303, `/player/${pid}`);
-        res.end();
+app.post('/player', async (req,res,next) => {
+    try{
+        let {invalid_fields,new_player} = p.new_player(req.query);
+        if(invalid_fields.length == 0){
+            console.log(new_player);
+            let name = await mongo.MongoDb.collection('users').insertOne(new_player);
+            res.redirect(303, `/player/${name.insertedId.toString()}`);
+            res.end();
+        }
+        else{
+            res.writeHead(422);
+            res.write("invalid fields: " + invalid_fields.join(", "));
+            res.end();
+        }        
+        next();
+    } catch(err){
+        return next(err);
     }
-    else{
-        res.writeHead(422);
-        res.write("invalid fields: " + response.join(", "));
-        res.end();
-    }
-    next();
 });
 
 app.post('/player/:pid', (req,res,next) => {
@@ -485,6 +488,40 @@ app.post('/deposit/player/:pid', (req,res,next) => {
 
 // ***********************************************************************************
 
-app.listen(`${PORT}`);
+class MongoDB {
+    constructor(){
+        this.MongoDb = null;
+        this.connect_mongo(this.read_json());
+        this.ObjectId = require('mongodb').ObjectId; //allows us to look up by ObjectID
+    }
+    
+    read_json(){
+        try{
+            let data = fs.readFileSync(MONGO_DATA_PATH,'utf8');
+            let json_file = JSON.parse(data);
+            // console.log(json_file);
+            return json_file;
+        } catch(err){
+            console.log(err.name);
+            exit(2);
+        }
+        
+    }
 
-console.log('server started, port 3000');
+    connect_mongo(mongo_json){
+        const uri = `mongodb://${mongo_json.host}:${mongo_json.port}?useUnifiedTopology=true`;
+        const MONGO_DB = `${mongo_json.db}`;
+        const { MongoClient } = require('mongodb');
+        MongoClient.connect(uri, (err, mongoConnect) => {  
+            if (err) {
+                console.log(err.name);
+                exit(5);
+            }
+            this.MongoDb = mongoConnect.db(MONGO_DB);
+            app.listen(PORT);
+            console.log(`Server started, port ${PORT}`);
+        });
+    }
+}
+
+const mongo = new MongoDB();

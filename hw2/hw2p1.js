@@ -7,6 +7,7 @@ const app = express();
 
 const PORT = 3000;
 const HOST = 'localhost';
+const DATA_PATH = './data/player.json';
 
 
 let next_pid = getStartingPID();
@@ -16,8 +17,8 @@ console.log(`NEXT PID: ${next_pid}`);
 // Updates the player.json file when any changes occur
 function reWriteFile(file_obj) {
     try{
-        file_obj.update_at = new Date();
-        fs.writeFileSync('./data/player.json', JSON.stringify(file_obj));
+        file_obj.updated_at = new Date();
+        fs.writeFileSync(DATA_PATH, JSON.stringify(file_obj));
     }catch(err){
         console.log(err);
     }
@@ -25,10 +26,11 @@ function reWriteFile(file_obj) {
 // Attempts to open player.json file and return parsed JSON object
 function openFile() {
     try{
-        let data = fs.readFileSync('./data/player.json','utf8');
+        let data = fs.readFileSync(DATA_PATH,'utf8');
         let json_file = JSON.parse(data);
         return json_file;
     } catch(err){
+        // console.log(err);
         let json_file = createFile();
         return json_file; // return empty JSON object
     }
@@ -36,8 +38,8 @@ function openFile() {
 // Creates player.json file if it does not exist
 function createFile() {
     try{
-        let json_file = {"players":[], "update_at": new Date(),"create_at":new Date(),"version": "1.0"};
-        fs.writeFileSync('./data/player.json', JSON.stringify(json_file));
+        let json_file = {"players":[], "updated_at": new Date(),"created_at":new Date(),"version": "1.0"};
+        fs.writeFileSync(DATA_PATH, JSON.stringify(json_file));
         return json_file;
     } catch(err){
         console.log(err);
@@ -45,21 +47,13 @@ function createFile() {
 }
 // *********************************************************************************
 
-
 // ***************************** GET FUNCTIONS **************************************
 // Returns JSON object of players
 function getPlayers() {
     try{
         let players = openFile();
         players = players.players;
-        players.sort(function(a,b) {
-            var nameA = a.fname.toUpperCase();
-            var nameB = b.fname.toUpperCase();
-            if (nameA < nameB) {return -1;}
-            if (nameA > nameB) {return 1;}
-            return 0;
-        });
-        return players;
+        return alphabetizePlayers(players);
     } catch(err) {
         console.log(err);
         return undefined;
@@ -120,6 +114,7 @@ function deletePlayer(id) {
 
 // ***************************** POST FUNCTIONS ***********************************
 function addPlayer(params){
+    console.log(params);
     let invalid_fields = [];
     // Check handedness
     if(params.handed == undefined){
@@ -162,21 +157,25 @@ function addPlayer(params){
     reWriteFile(json_file);
     next_pid++; //do last to ensure no errors occurred
     return invalid_fields;
-
 }
 
 function updatePlayer(id, query){
     let active = 0;
-    if(query.active == 1 || query.active.toLowerCase() == "t" || query.active.toLowerCase() == "true"){
-        active = true;
+    let active_change_flag = 0;
+    if(query.active != undefined){
+        if(query.active == 1 || query.active.toLowerCase() == "t" || query.active.toLowerCase() == "true"){
+            active = true;
+        }
+        else if(query.active == 0 || query.active.toLowerCase() == "f" || query.active.toLowerCase() == "false"){
+            active = false;
+        }
+        else{
+            console.log("ambiguous input for 'is_active'");
+            return 0;
+        }
+        active_change_flag = 1;
     }
-    else if(query.active == 0 || query.active.toLowerCase() == "f" || query.active.toLowerCase() == "false"){
-        active = false;
-    }
-    else{
-        console.log("ambiguous input for 'is_active'");
-        return 0;
-    }
+   
 
     let name_change_flag = 0;
     if(query.lname != undefined){
@@ -190,7 +189,9 @@ function updatePlayer(id, query){
     let json_file = openFile();
     for(let i = 0; i < json_file.players.length; i++){
         if(json_file.players[i].pid == id) {
-            json_file.players[i].is_active = active;
+            if(active_change_flag){
+                json_file.players[i].is_active = active;
+            }
             if (name_change_flag){
                 json_file.players[i].lname = query.lname;
             }
@@ -206,17 +207,18 @@ function updatePlayerBalance(id, query){
         return 0;
     }
     let new_balance = formatBalanceData(query.amount_usd)
-    let old_balance = '0.00';
+    let old_balance = 0.00;
     let json_file = openFile();
     for(let i = 0; i < json_file.players.length; i++){
         if(json_file.players[i].pid == id) {
             old_balance = json_file.players[i].balance_usd;
-            json_file.players[i].balance_usd = new_balance;
+            json_file.players[i].balance_usd = parseFloat(new_balance) + parseFloat(old_balance);
             reWriteFile(json_file);
             let player_balance = {
                 old_balance_usd: old_balance,
-                new_balance_usd: new_balance
+                new_balance_usd: json_file.players[i].balance_usd.toFixed(2)
             };
+            console.log(player_balance);
             return player_balance;
         }
     }
@@ -254,10 +256,10 @@ function formatNewPlayerData(params){
 
 function formatPlayerOutput(player){
     let hand = '';
-    if(player.handed == "L"){
+    if(player.handed == "L" || player.handed.toLowerCase() == "left"){
         hand = "left";
     }
-    else if(player.handed == "R"){
+    else if(player.handed == "R" || player.handed.toLowerCase() == "right"){
         hand = "right";
     }
     else{
@@ -279,14 +281,13 @@ function formatPlayerOutput(player){
         is_active: player.is_active,
         balance_usd: player.balance_usd
     }
-
     return player_output;
 }
 
 function formatBalanceData(balance){
     let money = balance.split(".");
     let balance_value = 0;
-    if(money[1] == undefined){
+    if(money[1] == undefined || money[1] == ""){
         balance_value = money[0] + ".00";
     }
     else if (money[1].length == 1){
@@ -328,16 +329,32 @@ function validateName(name){
 }
 
 function getStartingPID(){
-    try {
+    if(fs.existsSync(DATA_PATH)){
         let initial_players = getPlayers();
         if (initial_players.length == 0){
             return 1; //start at index 1 bc no players are in JOSN file
         }
         return Math.max(...initial_players.map(({pid}) => pid)) + 1;
-    } catch(err){
-        console.log(err);
     }
-    
+    return 1;
+}
+
+function alphabetizePlayers(players){
+    players.sort(function(a,b) {
+        let fnameA = a.fname.toUpperCase();
+        let fnameB = b.fname.toUpperCase();
+        if (fnameA < fnameB) {return -1;}
+        if (fnameA > fnameB) {return 1;}
+        if(fnameA == fnameB){
+            let lnameA = a.lname.toUpperCase();
+            let lnameB = b.lname.toUpperCase();
+            if (lnameA < lnameB) {return -1;}
+            if (lnameA > lnameB) {return 1;}
+            return 0;
+        }
+        return 0;
+    });
+    return players;
 }
 // function verifyPlayerExists(id){
 //     let json_file = openFile();
@@ -362,7 +379,6 @@ app.get('/ping', (req, res, next) => {
 });
 
 app.get('/player', (req,res,next) => {
-    console.log("here");
     try{
         let players = getActivePlayers();
         if(players == undefined){
@@ -399,7 +415,7 @@ app.delete('/player/:pid', (req,res,next) => {
         res.end();
     }
     else{
-        res.redirect(303, `http://${HOST}:${PORT}/player`);
+        res.redirect(303, `/player`);
         res.end();
     }
     next();
@@ -408,9 +424,9 @@ app.delete('/player/:pid', (req,res,next) => {
 // POST FUNCTIONS
 app.post('/player', (req,res,next) => {
     let response = addPlayer(req.query);
+    let pid = next_pid - 1;
     if(response.length == 0){
-        res.redirect(303, `http://${HOST}:${PORT}/player`);
-        // res.redirect(303, '/');
+        res.redirect(303, `/player/${pid}`);
         res.end();
     }
     else{
@@ -424,7 +440,7 @@ app.post('/player', (req,res,next) => {
 app.post('/player/:pid', (req,res,next) => {
     let status = updatePlayer(req.params.pid, req.query);
     if(status){
-        res.redirect(303, `http://${HOST}:${PORT}/player/${req.params.pid}`);
+        res.redirect(303, `/player/${req.params.pid}`);
         res.end();
     }
     else{
