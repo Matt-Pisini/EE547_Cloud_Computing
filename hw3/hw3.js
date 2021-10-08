@@ -14,6 +14,7 @@ const MONGO_DATA_PATH = './config/mongo.json';
 
 // ***************************** FILE WRITING **************************************
 // Updates the player.json file when any changes occur
+
 function reWriteFile(file_obj) {
     try{
         file_obj.updated_at = new Date();
@@ -89,26 +90,6 @@ function getPlayer(id) {
 }
 // *********************************************************************************
 
-// ***************************** DELETE FUNCTIONS ***********************************
-// If player exists, deletes player from JSON object and rewrites file; else returns undefined.
-function deletePlayer(id) {
-    try{
-        let json_file = openFile();
-        let players = json_file.players;
-        for(let i = 0; i < players.length; i++){
-            if(players[i].pid == id){
-                let elem = players.splice(i,1); //remove element from players array
-                reWriteFile(json_file);
-                return elem;
-            }
-        }
-        return undefined;
-    } catch(err){
-        console.log(err);
-    }
-}
-// ********************************************************************************
-
 // ***************************** POST FUNCTIONS ***********************************
 class Post {
     new_player(params){
@@ -158,45 +139,23 @@ class Post {
     }
 
     update_player(id, query){
-        let active = 0;
-        let active_change_flag = 0;
-        if(query.active != undefined){
-            if(query.active == 1 || query.active.toLowerCase() == "t" || query.active.toLowerCase() == "true"){
-                active = true;
-            }
-            else if(query.active == 0 || query.active.toLowerCase() == "f" || query.active.toLowerCase() == "false"){
-                active = false;
-            }
-            else{
-                console.log("ambiguous input for 'is_active'");
-                return 0;
-            }
-            active_change_flag = 1;
+        let updates = {};
+
+        if( (query.active != undefined) && v.active(query.active) ){
+            updates.is_active = form.active(query.active);
         }
        
-        let name_change_flag = 0;
-        if(query.lname != undefined){
-            if(v.name(query.lname)){
-                name_change_flag = 1;
-            }
-            else{
-                return 0; //invalid lname field
-            }
+        if( (query.lname != undefined) && v.name(query.lname)){
+            updates.lname = query.lname;
         }
-        let json_file = openFile();
-        for(let i = 0; i < json_file.players.length; i++){
-            if(json_file.players[i].pid == id) {
-                if(active_change_flag){
-                    json_file.players[i].is_active = active;
-                }
-                if (name_change_flag){
-                    json_file.players[i].lname = query.lname;
-                }
-                reWriteFile(json_file);
-                return 1;
-            }
+
+        //either nothing supplied or something invalid
+        if(Object.keys(updates).length == 0){
+            return updates;
         }
-        return 0;
+        else{
+            return updates;
+        }
     }
 
     update_balance(id, query){
@@ -306,6 +265,14 @@ class Formatter {
         
         return new_player;
     }
+    active(input){
+        if(input == 1 || input.toLowerCase() == "t" || input.toLowerCase() == "true"){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
 }
 const form = new Formatter();
 
@@ -342,6 +309,18 @@ class Validator {
             return 0;
         }
         return 1;
+    }
+    active(input){
+        if(input == 1 || input.toLowerCase() == "t" || input.toLowerCase() == "true"){
+            return 1;
+        }
+        else if(input == 0 || input.toLowerCase() == "f" || input.toLowerCase() == "false"){
+            return 1;
+        }
+        else{
+            console.log("ambiguous input for 'is_active'");
+            return 0;
+        }
     }
 
 }
@@ -390,7 +369,7 @@ app.get('/ping', (req, res, next) => {
     next();
 });
 
-app.get('/player', (req,res,next) => {
+app.get('/player', async (req,res,next) => {
     try{
         let players = getActivePlayers();
         if(players == undefined){
@@ -420,17 +399,22 @@ app.get('/player/:pid', (req,res,next) => {
 });
 
 // DELETE FUNCTIONS
-app.delete('/player/:pid', (req,res,next) => {
-    let player = deletePlayer(req.params.pid);
-    if(player == undefined){
-        res.writeHead(404);
-        res.end();
+app.delete('/player/:pid', async (req,res,next) => {
+    try {
+        let {acknowledged, deletedCount} = await mongo.delete_player(req.params.pid);
+        if(acknowledged == true && deletedCount == 1){
+            res.redirect(303, `/player`);
+            res.end();
+        }
+        else{
+            res.writeHead(404);
+            res.end();
+        }
+        next();
+    } catch (err) {
+        console.log(err);
+        next(err);
     }
-    else{
-        res.redirect(303, `/player`);
-        res.end();
-    }
-    next();
 });
 
 // POST FUNCTIONS
@@ -438,8 +422,7 @@ app.post('/player', async (req,res,next) => {
     try{
         let {invalid_fields,new_player} = p.new_player(req.query);
         if(invalid_fields.length == 0){
-            console.log(new_player);
-            let name = await mongo.MongoDb.collection('users').insertOne(new_player);
+            let name = await mongo.insert_player(new_player);
             res.redirect(303, `/player/${name.insertedId.toString()}`);
             res.end();
         }
@@ -454,35 +437,45 @@ app.post('/player', async (req,res,next) => {
     }
 });
 
-app.post('/player/:pid', (req,res,next) => {
-    let status = p.update_player(req.params.pid, req.query);
-    if(status){
-        res.redirect(303, `/player/${req.params.pid}`);
-        res.end();
+app.post('/player/:pid', async (req,res,next) => {
+    try{
+        let updates = p.update_player(req.params.pid, req.query);
+        if(Object.keys(updates).length > 0){
+            await mongo.update_player(req.params.pid, updates);
+            res.redirect(303, `/player/${req.params.pid}`);
+            res.end();
+        }
+        else{
+            res.writeHead(404);
+            res.end();
+        }
+        next();
+    } catch(err){
+        console.log(err);
+        next(err);
     }
-    else{
-        res.writeHead(404);
-        res.end();
-    }
-    next();
 });
 
 app.post('/deposit/player/:pid', (req,res,next) => {
-    let status = p.update_balance(req.params.pid, req.query);
-    if(status == 0){
+    let updates = p.update_balance(req.params.pid, req.query);
+    if(Object.keys(updates).length == 0){
         res.writeHead(400);
         res.end();
     }
-    else if(status == undefined)
-    {
-        res.writeHead(404);
-        res.end();
-    }
-    else{
-        res.writeHead(200);
-        res.write(JSON.stringify(status,null,2));
-        res.end();
-    }
+    // if(status == 0){
+    //     res.writeHead(400);
+    //     res.end();
+    // }
+    // else if(status == undefined)
+    // {
+    //     res.writeHead(404);
+    //     res.end();
+    // }
+    // else{
+    //     res.writeHead(200);
+    //     res.write(JSON.stringify(status,null,2));
+    //     res.end();
+    // }
     next();
 });
 
@@ -491,15 +484,15 @@ app.post('/deposit/player/:pid', (req,res,next) => {
 class MongoDB {
     constructor(){
         this.MongoDb = null;
-        this.connect_mongo(this.read_json());
         this.ObjectId = require('mongodb').ObjectId; //allows us to look up by ObjectID
+        this.collection = 'users';
+        this.connect_mongo(this.read_json());
     }
     
     read_json(){
         try{
             let data = fs.readFileSync(MONGO_DATA_PATH,'utf8');
             let json_file = JSON.parse(data);
-            // console.log(json_file);
             return json_file;
         } catch(err){
             console.log(err.name);
@@ -522,6 +515,37 @@ class MongoDB {
             console.log(`Server started, port ${PORT}`);
         });
     }
+
+    update_player(pid, values){
+        try {
+            let set_values = {$set:values};
+            let key_value = {_id:this.ObjectId(pid.toString())};
+            let update_obj = {key_value, set_values};
+            this.MongoDb.collection(this.collection).updateOne(update_obj.key_value, update_obj.set_values);
+        } catch (err) {
+            console.log(err);
+        }
+    }
+
+    insert_player(new_player){
+        try{
+            return this.MongoDb.collection(this.collection).insertOne(new_player);
+        } catch(err){
+            console.log(err);
+        }
+    }
+
+    delete_player(pid){
+        try {
+            let key_value = {_id:this.ObjectId(pid.toString())};
+            console.log(key_value);
+            return this.MongoDb.collection(this.collection).deleteOne(key_value)
+        } catch (err) {
+            console.log(err);
+            next(err);
+        }
+    }
+
 }
 
 const mongo = new MongoDB();
