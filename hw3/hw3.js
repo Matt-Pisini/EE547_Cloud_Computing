@@ -233,6 +233,14 @@ class Decorator {
         }
         return player_output;
     }
+
+    updated_balance(old_balance, new_balance){
+        let updated_balance_output = {
+            old_balance_usd: old_balance,
+            new_balance_usd: new_balance
+        };
+        return updated_balance_output;
+    }
 }
 const decor = new Decorator();
 
@@ -371,10 +379,8 @@ app.get('/ping', (req, res, next) => {
 
 app.get('/player', async (req,res,next) => {
     try{
-        let players = getActivePlayers();
-        if(players == undefined){
-            console.log("undefined");
-        }
+        let players = await mongo.get_players();
+        players = alphabetizePlayers(players); 
         res.writeHead(200);
         res.write(JSON.stringify(players, null, 2));
         res.end();
@@ -384,18 +390,24 @@ app.get('/player', async (req,res,next) => {
     next();
 });
 
-app.get('/player/:pid', (req,res,next) => {
-    let player = getPlayer(req.params.pid);
-    if (player == undefined){
-        res.writeHead(404);
-        res.end();
+app.get('/player/:pid', async (req,res,next) => {
+    try {
+        let player = await mongo.get_player(req.params.pid);
+        console.log(JSON.stringify(player));
+        if (player == null){
+            res.writeHead(404);
+            res.end();
+        } 
+        else{
+            res.writeHead(200);
+            res.write(JSON.stringify(player, null, 2));
+            res.end();
+        }
+        next();
+    } catch (err) {
+        console.group(err);
+        next(err);
     } 
-    else{
-        res.writeHead(200);
-        res.write(JSON.stringify(player, null, 2));
-        res.end();
-    }
-    next();
 });
 
 // DELETE FUNCTIONS
@@ -456,26 +468,24 @@ app.post('/player/:pid', async (req,res,next) => {
     }
 });
 
-app.post('/deposit/player/:pid', (req,res,next) => {
-    let updates = p.update_balance(req.params.pid, req.query);
-    if(Object.keys(updates).length == 0){
-        res.writeHead(400);
+app.post('/deposit/player/:pid', async (req,res,next) => {
+    let player = await mongo.get_player(req.params.pid);
+    if(player != null && v.balance(req.query.amount_usd)){
+        let old_balance = decor.balance(player.balance_usd);
+        let new_balance = decor.balance(req.query.amount_usd);
+        console.log(old_balance);
+        console.log(new_balance);
+        let balance_output = decor.updated_balance(new_balance, old_balance);
+        let updates = {balance_usd:new_balance};
+        await mongo.update_player(req.params.pid, updates);
+        res.writeHead(200);
+        res.write(JSON.stringify(balance_output,null,2));
         res.end();
     }
-    // if(status == 0){
-    //     res.writeHead(400);
-    //     res.end();
-    // }
-    // else if(status == undefined)
-    // {
-    //     res.writeHead(404);
-    //     res.end();
-    // }
-    // else{
-    //     res.writeHead(200);
-    //     res.write(JSON.stringify(status,null,2));
-    //     res.end();
-    // }
+    else{
+        res.writeHead(404);
+        res.end();
+    }
     next();
 });
 
@@ -539,7 +549,29 @@ class MongoDB {
         try {
             let key_value = {_id:this.ObjectId(pid.toString())};
             console.log(key_value);
-            return this.MongoDb.collection(this.collection).deleteOne(key_value)
+            return this.MongoDb.collection(this.collection).deleteOne(key_value);
+        } catch (err) {
+            console.log(err);
+            next(err);
+        }
+    }
+
+    get_player(pid){
+        try {
+            if(pid.length != 24){
+                return null;
+            }
+            let key_value = {_id:this.ObjectId(pid.toString())};
+            return this.MongoDb.collection(this.collection).findOne(key_value);
+        } catch (err) {
+            console.log(err);
+            next(err);
+        }
+    }
+
+    get_players(){
+        try {
+            return this.MongoDb.collection(this.collection).find({}).toArray();
         } catch (err) {
             console.log(err);
             next(err);
