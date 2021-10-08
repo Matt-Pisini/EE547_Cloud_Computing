@@ -1,0 +1,4 @@
+node_modules/*
+hw3p1.js
+package-lock.json
+report.json
