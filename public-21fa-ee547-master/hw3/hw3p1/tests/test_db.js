@@ -45,8 +45,8 @@ describe('database connection', function() {
   context('immediate write', () => {
     it('POST /player', async () => {
       let pids = await fix.list_players();
-
       const pid = await fix.post_player();
+
       expect(pids).to.not.contain(pid);
 
       pids = await fix.list_players();
@@ -60,7 +60,6 @@ describe('database connection', function() {
       let lname = 'lname';
 
       const pid = await fix.add_player({ lname });
-
       lname = 'lnamep';
 
       await fix.test_forward(
@@ -101,6 +100,8 @@ describe('database connection', function() {
 
       const new_balance_usd = fix._add_usd(balance_usd, amount_usd);
       const player = await fix.get_player(pid);
+      console.log(new_balance_usd);
+      console.log(player.balance_usd);
       expect(player).to.exist.and.to.be.a.document('player');
       expect(player.balance_usd).and.to.satisfy(val => (val === new_balance_usd || val.toFixed(2) === new_balance_usd));
     });

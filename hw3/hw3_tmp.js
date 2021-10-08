@@ -44,10 +44,10 @@ class Decorator {
 
     name(fname,lname){
         if(lname){
-            return fname + ' ' + lname;
+            return player.fname + ' ' + player.lname;
         }
         else {  
-            return fname;
+            return player.fname;
         }
     }
 
@@ -63,7 +63,7 @@ class Decorator {
             hand = "ambi";
         }
     
-        let name = this.name(player.fname,player.lname);
+        let name = this.name(fname,lname);
         
     
         let player_output = {
