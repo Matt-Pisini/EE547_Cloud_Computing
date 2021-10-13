@@ -11,8 +11,11 @@ const MONGO_HOST = '192.168.0.18';
 const DATA_PATH = './data/player.json';
 const MONGO_DATA_PATH = './config/mongo.json';
 
-const PLAYER_COLLECTION = 'player';
-const MATCH_COLLECTION = 'match';
+// MAPS
+const COLLECTION = {
+    PLAYER: 'player',
+    MATCH: 'match'
+}
 
 const MATCH_INPUT = {
     PLAYER_DNE: 0,
@@ -21,6 +24,21 @@ const MATCH_INPUT = {
     OTHER: 3,
     VALID: 4
 }
+
+// const PLAYER_ATTRIBUTES_ARRAY = [
+//     "pid",
+//     "name",
+//     "handed",
+//     "is_active",
+//     "num_won",
+//     "num_dq",
+//     "balance_usd",
+//     "total_points",
+//     "total_prize_usd",
+//     "efficiency",
+//     "created_at"
+// ]
+
 
 
 // ***************************** DECORATE CLASS ***********************************
@@ -72,12 +90,13 @@ class Decorator {
             handed: hand,
             is_active: player.is_active,
             num_won: 0,
+            num_join: 0,
             num_dq: 0,
             balance_usd: player.balance_usd,
             total_points: 0,
             total_prize_usd: 0,
             efficiency: 0.0,
-            created_at: player.created_at,
+            in_active_match: false,
 
         }
         return player_output;
@@ -99,35 +118,42 @@ class Decorator {
         return updated_balance_output;
     }
 
-    match(match){
+    async match(match){
 
-        // if(match.is_active == true){
-        //     winner_pid = null;
-        // }
+        let temp = {is_active: true};
+        if(match.ended_at != null){
+            temp.winner = match.winner_pid;
+            temp.is_active = false;
+        } 
+        let player1 = await mongo.get_value(COLLECTION.PLAYER,match.p1_id);
+        let player2 = await mongo.get_value(COLLECTION.PLAYER,match.p2_id);
 
-        // let match_output = {
-        //     mid: match._id,
-        //     entry_fee_usd: match.entry_fee_usd,
-        //     p1_id: match.p1_id,
-        //     p1_name: ,
-        //     p1_points: match.p1_points,
-        //     p2_id: match.p2_id,
-        //     p2_name: ,
-        //     p2_points: match.p2_points,
-        //     winner_pid: ,
-        //     is_dq: ,
-        //     is_active: match.is_active,
-        //     prize_usd: match.prize_usd,
-        //     age: new Date() - match.end_at,
-        //     end_at: match.end_at
-        // }
-        // return match_output;
+        let name1 = this.name(player1.fname,player1.lname);
+        let name2 = this.name(player2.fname,player2.lname);
+
+        let match_output = {
+            mid: match._id,
+            entry_fee_usd: match.entry_fee_usd,
+            p1_id: match.p1_id,
+            p1_name: name1,
+            p1_points: match.p1_points,
+            p2_id: match.p2_id,
+            p2_name: name2,
+            p2_points: match.p2_points,
+            winner_pid: temp.winner,
+            is_dq: match.is_dq,
+            is_active: temp.is_active,
+            prize_usd: match.prize_usd,
+            age: new Date() - match.created_at,
+            end_at: match.ended_at
+        }
+        return match_output;
     }
 
-    matches(match_list){
+    async matches(match_list){
         let output = [];
         for(let i = 0; i < match_list.length; i++){
-            output.push(this.player(match_list[i]));
+            output.push(await this.match(match_list[i]));
         }
         return output;
     }
@@ -178,7 +204,7 @@ class Formatter {
             created_at: new Date(),
             ended_at: null,
             entry_fee_usd: decor.balance(params.entry_fee_usd),
-            is_dq: null,
+            is_dq: false,
             p1_id: params.pid1,
             p1_points: 0,
             p2_id: params.pid2,
@@ -233,25 +259,13 @@ class Validator {
     }
 
     update_player(query){
-        let updates = {};
-        if(query.active != undefined){
-            if(this.active(query.active)){
-                updates.is_active = db_form.active(query.active);
-            }
-            else{
-                return null;
-            }
+        if(query.active != undefined && !this.active(query.active)){
+            return 0;
         }
-       
-        if(query.lname != undefined){
-            if(this.name(query.lname)){
-                updates.lname = query.lname;
-            }
-            else{
-                return null;
-            }
+        if(query.lname != undefined && !this.name(query.lname)){
+            return 0;
         }
-        return updates;
+        return 1;
     }
 
     balance(balance){
@@ -296,8 +310,8 @@ class Validator {
     }
 
     async new_match(query){
-        let player1 = await mongo.get_value(PLAYER_COLLECTION,query.pid1);
-        let player2 = await mongo.get_value(PLAYER_COLLECTION,query.pid2);
+        let player1 = await mongo.get_value(COLLECTION.PLAYER,query.pid1);
+        let player2 = await mongo.get_value(COLLECTION.PLAYER,query.pid2);
 
         if(player1 == null){
             return MATCH_INPUT.PLAYER_DNE;
@@ -305,12 +319,12 @@ class Validator {
         if(player2 == null){
             return MATCH_INPUT.PLAYER_DNE;
         }
-        if(!this.player_active(player1.is_active)){
-            return MATCH_INPUT.PLAYER_ACTIVE;
-        }
-        if(!this.player_active(player2.is_active)){
-            return MATCH_INPUT.PLAYER_ACTIVE;
-        }
+        // if(!this.player_active(player1.is_active)){
+        //     return MATCH_INPUT.PLAYER_ACTIVE;
+        // }
+        // if(!this.player_active(player2.is_active)){
+        //     return MATCH_INPUT.PLAYER_ACTIVE;
+        // }
         if(!this.balance(query.entry_fee_usd) || !this.balance(query.prize_usd)){
             return MATCH_INPUT.OTHER;
         }
@@ -324,7 +338,7 @@ class Validator {
         return MATCH_INPUT.VALID;
     }
 
-    async player_active(active){
+    player_active(active){
         if(active == true){
             return 0;
         }
@@ -333,7 +347,7 @@ class Validator {
         }
     }
 
-    async player_balance_sufficient(balance, entry_fee){
+    player_balance_sufficient(balance, entry_fee){
         if(parseFloat(balance) > parseFloat(entry_fee)){
             return 1;
         }
@@ -344,6 +358,27 @@ class Validator {
 
 }
 const v = new Validator();
+
+class Updater {
+    player(query){
+        let updates = {};
+        if(query.active != undefined){
+            updates.is_active = db_form.active(query.active);
+        }
+        if(query.lname != undefined){
+            updates.lname = query.lname;
+        }
+        //ADD ALL POSSIBLE UPDATES
+
+        return updates;
+    }
+
+    match() {
+
+    }
+}
+
+const updater = new Updater();
 
 // ***************************** OTHER FUNCTIONS ***********************************
 
@@ -367,10 +402,10 @@ function alphabetizePlayers(players){
 
 function sort_by_prize_usd(matches){
     matches.sort(function(a,b) {
-        let prize1 = a.prize_usd.toUpperCase();
-        let prize2 = b.prize_usd.toUpperCase();
-        if (prize1 < prize2) {return -1;}
-        if (prize1 > prize2) {return 1;}
+        let prize1 = parseFloat(a.prize_usd);
+        let prize2 = parseFloat(b.prize_usd);
+        if (prize1 < prize2) {return 1;}
+        if (prize1 > prize2) {return -1;}
         return 0;
     });
     return matches;
@@ -401,7 +436,7 @@ app.get('/ping', (req, res, next) => {
 
 app.get('/player', async (req,res,next) => {
     try{
-        let players = await mongo.get_values(PLAYER_COLLECTION);
+        let players = await mongo.get_values(COLLECTION.PLAYER);
         players = alphabetizePlayers(players); 
         res.writeHead(200);
         res.write(JSON.stringify(decor.players(players), null, 2));
@@ -414,10 +449,11 @@ app.get('/player', async (req,res,next) => {
 
 app.get('/match', async (req,res,next) => {
     try{
-        let matches = await mongo.get_values(MATCH_COLLECTION);
+        let matches = await mongo.get_values(COLLECTION.MATCH);
+        console.log(JSON.stringify(matches));
         matches = sort_by_prize_usd(matches); 
         res.writeHead(200);
-        res.write(JSON.stringify(decor.matches(matches), null, 2));
+        res.write(JSON.stringify(await decor.matches(matches), null, 2));
         res.end();
     } catch(err){
         console.log(err);
@@ -427,7 +463,7 @@ app.get('/match', async (req,res,next) => {
 
 app.get('/player/:pid', async (req,res,next) => {
     try {
-        let player = await mongo.get_value(PLAYER_COLLECTION,req.params.pid);
+        let player = await mongo.get_value(COLLECTION.PLAYER,req.params.pid);
         if (player == null){
             res.writeHead(404);
             res.end();
@@ -439,15 +475,35 @@ app.get('/player/:pid', async (req,res,next) => {
         }
         next();
     } catch (err) {
-        console.group(err);
+        console.log(err);
         next(err);
     } 
+});
+
+app.get('/match/:mid', async (req,res,next) => {
+    try {
+        let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
+        console.log(match);
+        if(match == null){
+            res.writeHead(404);
+            res.end();
+        }
+        else{
+            res.writeHead(200);
+            res.write(JSON.stringify(await decor.match(match), null, 2));
+            res.end();
+        }
+        next();
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
 });
 
 // DELETE FUNCTIONS
 app.delete('/player/:pid', async (req,res,next) => {
     try {
-        let {acknowledged, deletedCount} = await mongo.delete_value(PLAYER_COLLECTION,req.params.pid);
+        let {acknowledged, deletedCount} = await mongo.delete_value(COLLECTION.PLAYER,req.params.pid);
         if(acknowledged == true && deletedCount == 1){
             res.redirect(303, `/player`);
             res.end();
@@ -469,7 +525,7 @@ app.post('/player', async (req,res,next) => {
         let invalid_fields = v.new_player(req.query);
         if(invalid_fields.length == 0){
             let mongo_player_input = db_form.new_player(req.query);
-            let name = await mongo.insert_value(PLAYER_COLLECTION,mongo_player_input);
+            let name = await mongo.insert_value(COLLECTION.PLAYER,mongo_player_input);
             res.redirect(303, `/player/${name.insertedId.toString()}`);
             res.end();
         }
@@ -506,11 +562,12 @@ app.post('/match', async (req,res,next) => {
                 res.writeHead(400);
                 res.end()
                 break;
-            default:
+            case MATCH_INPUT.VALID:
                 let mongo_player_input = db_form.new_match(req.query);
-                let name = await mongo.insert_value(MATCH_COLLECTION,mongo_player_input);
-                res.redirect(303, `/player/${name.insertedId.toString()}`);
+                let name = await mongo.insert_value(COLLECTION.MATCH,mongo_player_input);
+                res.redirect(303, `/match/${name.insertedId.toString()}`);
                 res.end();
+
         }
         next();
     } catch(err){
@@ -520,13 +577,16 @@ app.post('/match', async (req,res,next) => {
 
 app.post('/player/:pid', async (req,res,next) => {
     try{
-        let updates = v.update_player(req.query);
+        let updates = {};
+        if(v.update_player(req.query)){
+            updates = updater.player(req.query);
+        }
         if(updates == null){
             res.writeHead(404);
             res.end();
         }
         else{
-            let result = await mongo.update_values(PLAYER_COLLECTION,req.params.pid, updates);
+            let result = await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates);
             if(result.matchedCount == 0){
                 res.writeHead(404);
                 res.end();
@@ -545,7 +605,7 @@ app.post('/player/:pid', async (req,res,next) => {
 });
 
 app.post('/deposit/player/:pid', async (req,res,next) => {
-    let player = await mongo.get_value(PLAYER_COLLECTION,req.params.pid);
+    let player = await mongo.get_value(COLLECTION.PLAYER,req.params.pid);
 
     // Invalide balance input
     if(!v.balance(req.query.amount_usd)){
@@ -561,7 +621,7 @@ app.post('/deposit/player/:pid', async (req,res,next) => {
             new_balance = new_balance.toFixed(2);
     
             let updates = {balance_usd:new_balance};
-            await mongo.update_values(PLAYER_COLLECTION,req.params.pid, updates);
+            await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates);
     
             let balance_output = decor.updated_balance(old_balance,new_balance);
             res.writeHead(200);
