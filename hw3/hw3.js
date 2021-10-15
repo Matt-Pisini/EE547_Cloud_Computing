@@ -1,6 +1,6 @@
 'use strict';
 
-const { json } = require("express");
+const { json, query } = require("express");
 const express = require("express");
 const fs = require('fs');
 const { exit } = require("process");
@@ -18,11 +18,13 @@ const COLLECTION = {
 }
 
 const MATCH_INPUT = {
-    PLAYER_DNE: 0,
-    PLAYER_ACTIVE: 1,
-    INSUFFICIENT_BAL: 2,
-    OTHER: 3,
-    VALID: 4
+    DNE: 0,
+    ACTIVE: 1,
+    INACTIVE: 2,
+    INSUFFICIENT_BAL: 3,
+    TIE: 4,
+    OTHER: 5,
+    VALID: 6
 }
 
 // const PLAYER_ATTRIBUTES_ARRAY = [
@@ -258,7 +260,15 @@ class Validator {
         return invalid_fields;
     }
 
-    update_player(query){
+    async update_player(query, pid){
+
+        let player = await mongo.get_value(COLLECTION.PLAYER,pid);
+
+        // PLAYER DNE
+        if (player == null){
+            return 0;
+        }
+
         if(query.active != undefined && !this.active(query.active)){
             return 0;
         }
@@ -309,21 +319,41 @@ class Validator {
         }
     }
 
+    async award_points(input){
+        if(input.query.points < 0){
+            return MATCH_INPUT.OTHER;
+        }
+
+        let match = await mongo.get_value(COLLECTION.MATCH,input.mid);
+
+        if(match == null){
+            return MATCH_INPUT.DNE;
+        }
+        if(!this.match_active(match.ended_at)){
+            return MATCH_INPUT.INACTIVE;
+        }
+        if((input.pid != match.p1_id) && (input.pid != match.p2_id)){
+            return MATCH_INPUT.DNE;
+        }
+
+        return MATCH_INPUT.VALID;
+    }
+
     async new_match(query){
         let player1 = await mongo.get_value(COLLECTION.PLAYER,query.pid1);
         let player2 = await mongo.get_value(COLLECTION.PLAYER,query.pid2);
 
         if(player1 == null){
-            return MATCH_INPUT.PLAYER_DNE;
+            return MATCH_INPUT.DNE;
         }
         if(player2 == null){
-            return MATCH_INPUT.PLAYER_DNE;
+            return MATCH_INPUT.DNE;
         }
         // if(!this.player_active(player1.is_active)){
-        //     return MATCH_INPUT.PLAYER_ACTIVE;
+        //     return MATCH_INPUT.ACTIVE;
         // }
         // if(!this.player_active(player2.is_active)){
-        //     return MATCH_INPUT.PLAYER_ACTIVE;
+        //     return MATCH_INPUT.ACTIVE;
         // }
         if(!this.balance(query.entry_fee_usd) || !this.balance(query.prize_usd)){
             return MATCH_INPUT.OTHER;
@@ -338,43 +368,108 @@ class Validator {
         return MATCH_INPUT.VALID;
     }
 
+    async end_match(mid){
+
+        let match = await mongo.get_value(COLLECTION.MATCH, mid);
+
+        if(match == null){
+            return MATCH_INPUT.DNE;
+        }
+        if(match.ended_at != null){
+            return MATCH_INPUT.INACTIVE;
+        }
+        if(parseInt(match.p1_points) == parseInt(match.p2_points)){
+            return MATCH_INPUT.TIE;
+        }
+        return MATCH_INPUT.VALID;
+    }
+
+    async disqualify(mid, pid){
+        let match = await mongo.get_value(COLLECTION.MATCH, mid);
+
+        if(match == null){
+            return MATCH_INPUT.DNE;
+        }
+        if(match.ended_at != null){
+            return MATCH_INPUT.INACTIVE;
+        }
+
+        let player = await mongo.get_value(COLLECTION.PLAYER, pid);
+
+        if(player == null){
+            return MATCH_INPUT.DNE;
+        }
+        return MATCH_INPUT.VALID;
+    }
+
     player_active(active){
-        if(active == true){
-            return 0;
-        }
-        else{
-            return 1;
-        }
+        return (active == true) ? 0 : 1;
+    }
+
+    match_active(end_at){
+        return (end_at == null) ? 1 : 0;
     }
 
     player_balance_sufficient(balance, entry_fee){
-        if(parseFloat(balance) > parseFloat(entry_fee)){
-            return 1;
-        }
-        else{
-            return 0;
-        }
+        return (parseFloat(balance) > parseFloat(entry_fee)) ? 1 : 0;
     }
 
 }
 const v = new Validator();
 
 class Updater {
-    player(query){
+    async player(query, pid){
         let updates = {};
-        if(query.active != undefined){
-            updates.is_active = db_form.active(query.active);
-        }
-        if(query.lname != undefined){
-            updates.lname = query.lname;
-        }
-        //ADD ALL POSSIBLE UPDATES
 
-        return updates;
+        switch(true){
+            case query.active != undefined:
+                updates.is_active = db_form.active(query.active);
+
+            case query.lname != undefined:
+                updates.lname = query.lname;
+
+        }
+
+        // UPDATE PLAYER
+        if(updates != undefined && ! await mongo.update_values(COLLECTION.PLAYER,pid,updates)){
+            throw console.error(`ERROR in Updater: updating COLLECTION:${COLLECTION.PLAYER} with ID:${pid}`);
+        }
     }
 
-    match() {
+    async match(query, mid, pid = null) {
+        let updates = {};
 
+        let match = await mongo.get_value(COLLECTION.MATCH, mid);
+
+        // CHANGE PLAYER SCORE
+        if (query.is_dq == undefined && pid != null){
+            if(match.p1_id == pid){
+                updates.p1_points = parseInt(match.p1_points) + parseInt(query.points);
+            }
+            else if (match.p2_id == pid){
+                updates.p2_points = parseInt(match.p2_points) + parseInt(query.points)
+            }
+            else{
+                throw console.error("Update has no valid player");
+            }
+        }
+        
+        // UPDATE VALUES
+        switch(true){
+            case query.is_dq != undefined:
+                updates.is_dq = query.is_dq;
+
+            case query.end_match == true:
+                updates.ended_at = new Date();
+        }
+
+        // PERFORM UPDATE ON MATCH
+        if(! await mongo.update_values(COLLECTION.MATCH, mid, updates)){
+            throw console.error(`ERROR: updating COLLECTION:${COLLECTION.MATCH} with ID:${mid}`);
+        }
+
+        // UPDATE PLAYER CHANGES ??????
+        // have it call updater.player() with values to change. Need to add those to database I believe.
     }
 }
 
@@ -544,13 +639,12 @@ app.post('/match', async (req,res,next) => {
     try{
         // console.log(req.query);
         let response = await v.new_match(req.query);
-        console.log(response);
         switch(response) {
-            case MATCH_INPUT.PLAYER_DNE:
+            case MATCH_INPUT.DNE:
                 res.writeHead(404);
                 res.end()
                 break;
-            case MATCH_INPUT.PLAYER_ACTIVE:
+            case MATCH_INPUT.ACTIVE:
                 res.writeHead(409);
                 res.end()
                 break;
@@ -567,6 +661,7 @@ app.post('/match', async (req,res,next) => {
                 let name = await mongo.insert_value(COLLECTION.MATCH,mongo_player_input);
                 res.redirect(303, `/match/${name.insertedId.toString()}`);
                 res.end();
+                break;
 
         }
         next();
@@ -575,27 +670,114 @@ app.post('/match', async (req,res,next) => {
     }
 });
 
+app.post('/match/:mid/award/:pid', async (req,res,next) => {
+    try {
+        let input = {
+            mid:req.params.mid,
+            pid:req.params.pid,
+            query:req.query
+        }
+        let response = await v.award_points(input);
+        switch(response) {
+            case MATCH_INPUT.DNE:
+                res.writeHead(404);
+                res.end();
+                break;
+            case MATCH_INPUT.INACTIVE:
+                res.writeHead(409);
+                res.end();
+                break;
+            case MATCH_INPUT.OTHER:
+                res.writeHead(400);
+                res.end();
+                break;
+            case MATCH_INPUT.VALID:
+                await updater.match(input.query,input.mid,input.pid);
+                let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
+                res.writeHead(200);
+                res.write(JSON.stringify(await decor.match(match), null, 2))
+                res.end();
+                break;
+        }
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+    next();
+});
+
+app.post('/match/:mid/end', async(req,res,next) => {
+    try {
+        let response = await v.end_match(req.params.mid);
+        switch(response){
+            case MATCH_INPUT.DNE:
+                res.writeHead(404);
+                res.end();
+                break;
+            case MATCH_INPUT.INACTIVE:
+                res.writeHead(409);
+                res.end();
+                break;
+            case MATCH_INPUT.TIE:
+                res.writeHead(404);
+                res.end();
+                break;
+            case MATCH_INPUT.VALID:
+                let updates = {end_match:true};
+                await updater.match(updates,req.params.mid)
+                let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
+                res.writeHead(200);
+                res.write(JSON.stringify(await decor.match(match), null, 2))
+                res.end();
+                break;
+        }
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+});
+
+app.post('/match/:mid/disqualify/:pid', async(req,res,next) => {
+    try {
+        let response = await v.disqualify(req.params.mid, req.params.pid);
+        switch(response){
+            case MATCH_INPUT.DNE:
+                res.writeHead(404);
+                res.end();
+                break;
+            case MATCH_INPUT.INACTIVE:
+                res.writeHead(409);
+                res.end();
+                break;
+            case MATCH_INPUT.OTHER:
+                res.writeHead(400);
+                res.end();
+                break;
+            case MATCH_INPUT.VALID:
+                let updates = {end_match:true,is_dq:true};
+                await updater.match(updates,req.params.mid, req.params.pid)
+                let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
+                res.writeHead(200);
+                res.write(JSON.stringify(await decor.match(match), null, 2))
+                res.end();
+                break;
+        }
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+});
+
 app.post('/player/:pid', async (req,res,next) => {
     try{
-        let updates = {};
-        if(v.update_player(req.query)){
-            updates = updater.player(req.query);
-        }
-        if(updates == null){
-            res.writeHead(404);
+        if(await v.update_player(req.query, req.params.pid)){
+            await updater.player(req.query,req.params.pid);
+            res.redirect(303, `/player/${req.params.pid}`);
             res.end();
         }
         else{
-            let result = await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates);
-            if(result.matchedCount == 0){
-                res.writeHead(404);
-                res.end();
-            }
-            else {
-                console.log(result);
-                res.redirect(303, `/player/${req.params.pid}`);
-                res.end();
-            }
+            res.writeHead(404);
+            res.end();
         }
         next();
     } catch(err){
@@ -621,12 +803,15 @@ app.post('/deposit/player/:pid', async (req,res,next) => {
             new_balance = new_balance.toFixed(2);
     
             let updates = {balance_usd:new_balance};
-            await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates);
-    
-            let balance_output = decor.updated_balance(old_balance,new_balance);
-            res.writeHead(200);
-            res.write(JSON.stringify(balance_output,null,2));
-            res.end();
+            if(await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates)){
+                let balance_output = decor.updated_balance(old_balance,new_balance);
+                res.writeHead(200);
+                res.write(JSON.stringify(balance_output,null,2));
+                res.end();
+            }
+            else{
+                console.log("error updating deposit");
+            }
         }
         else{
             res.writeHead(404);
@@ -674,13 +859,20 @@ class MongoDB {
         });
     }
 
-    update_values(collection,id, values){
+    async update_values(collection,id, values){
         try {
             let set_values = {$set:values};
             let key_value = {_id:this.ObjectId(id.toString())};
             let update_obj = {key_value, set_values};
             
-            return this.MongoDb.collection(collection).updateOne(update_obj.key_value, update_obj.set_values);
+            let response = await this.MongoDb.collection(collection).updateOne(update_obj.key_value, update_obj.set_values);
+            if(response.matchedCount == 0){
+                console.log(`Error updating COLLECTION:${collection} with ID:${id}`);
+                return false;
+            }
+            else{
+                return true;
+            }
         } catch (err) {
             console.log(err);
         }
@@ -713,7 +905,6 @@ class MongoDB {
             return this.MongoDb.collection(collection).findOne(key_value);
         } catch (err) {
             console.log(err);
-            next(err);
         }
     }
 
