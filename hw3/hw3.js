@@ -72,16 +72,19 @@ class Decorator {
     }
 
     player(player){
-        let hand = '';
-        if(player.handed == "L" || player.handed.toLowerCase() == "left"){
-            hand = "left";
-        }
-        else if(player.handed == "R" || player.handed.toLowerCase() == "right"){
-            hand = "right";
-        }
-        else{
-            hand = "ambi";
-        }
+
+        // let player = mongo.get_value(COLLECTION.PLAYER,);
+
+        // let hand = '';
+        // if(player.handed == "L" || player.handed.toLowerCase() == "left"){
+        //     hand = "left";
+        // }
+        // else if(player.handed == "R" || player.handed.toLowerCase() == "right"){
+        //     hand = "right";
+        // }
+        // else{
+        //     hand = "ambi";
+        // }
     
         let name = this.name(player.fname,player.lname);
         
@@ -89,16 +92,16 @@ class Decorator {
         let player_output = {
             pid: player._id,
             name: name,
-            handed: hand,
+            handed: player.handed,
             is_active: player.is_active,
-            num_won: 0,
-            num_join: 0,
-            num_dq: 0,
+            num_join: player.num_join,
+            num_won: player.num_won,
+            num_dq: player.num_dq,
             balance_usd: player.balance_usd,
-            total_points: 0,
-            total_prize_usd: 0,
-            efficiency: 0.0,
-            in_active_match: false,
+            total_points: player.total_points,
+            total_prize_usd: player.total_prize_usd,
+            efficiency: player.efficiency,
+            in_active_match: player.in_active_match,
 
         }
         return player_output;
@@ -168,17 +171,8 @@ const decor = new Decorator();
 class Formatter {
     new_player(params){
 
-        let hand = '';
-        if(params.handed.toLowerCase() == "left"){
-            hand = "L";
-        }
-        else if(params.handed.toLowerCase() == "right"){
-            hand = "R";
-        }
-        else{
-            hand = "A";
-        }
-    
+        
+        let hand = this.handed(params.handed);
         let balance_value = decor.balance(params.initial_balance_usd);
     
         let new_player = {            
@@ -187,17 +181,38 @@ class Formatter {
             handed: hand,
             is_active: true,
             balance_usd: balance_value,
-            created_at: new Date()
+            created_at: new Date(),
+            num_join: 0,
+            num_won: 0,
+            num_dq: 0,
+            total_points: 0,
+            total_prize_usd: 0,
+            efficiency: 0.0,
+            in_active_match: null
         }
         
         return new_player;
     }
+
     active(input){
         if(input == 1 || input.toLowerCase() == "t" || input.toLowerCase() == "true"){
             return true;
         }
         else {
             return false;
+        }
+    }
+
+    handed(input){
+
+        if(input.toLowerCase() == "left"){
+            return "L";
+        }
+        else if(input.toLowerCase() == "right"){
+            return "R";
+        }
+        else{
+            return "A";
         }
     }
 
@@ -349,12 +364,12 @@ class Validator {
         if(player2 == null){
             return MATCH_INPUT.DNE;
         }
-        // if(!this.player_active(player1.is_active)){
-        //     return MATCH_INPUT.ACTIVE;
-        // }
-        // if(!this.player_active(player2.is_active)){
-        //     return MATCH_INPUT.ACTIVE;
-        // }
+        if(this.player_active(player1.in_active_match)){
+            return MATCH_INPUT.ACTIVE;
+        }
+        if(this.player_active(player2.in_active_match)){
+            return MATCH_INPUT.ACTIVE;
+        }
         if(!this.balance(query.entry_fee_usd) || !this.balance(query.prize_usd)){
             return MATCH_INPUT.OTHER;
         }
@@ -403,7 +418,7 @@ class Validator {
     }
 
     player_active(active){
-        return (active == true) ? 0 : 1;
+        return (active != null) ? 1 : 0;
     }
 
     match_active(end_at){
@@ -420,16 +435,36 @@ const v = new Validator();
 class Updater {
     async player(query, pid){
         let updates = {};
+        let player = await mongo.get_value(COLLECTION.PLAYER, pid);
 
-        switch(true){
-            case query.active != undefined:
-                updates.is_active = db_form.active(query.active);
+        if (query.active != undefined) updates.is_active = db_form.active(query.active);
 
-            case query.lname != undefined:
-                updates.lname = query.lname;
+        if (query.lname != undefined) updates.lname = query.lname;
+        
+        if (query.in_active_match != undefined) updates.in_active_match = query.in_active_match;
 
+        if (query.join_match != undefined) updates.num_join = parseInt(player.num_join) + 1;
+        
+        if (query.win != undefined){
+            updates.num_won = parseInt(player.num_won) + 1;
+            updates.in_active_match = null;
+        }           
+
+        if (query.dq != undefined) {
+            updates.num_dq = parseInt(player.num_dq) + 1;
+            updates.in_active_match = null;
         }
 
+        if (query.add_points != undefined) updates.total_points = parseInt(player.total_points) + parseInt(query.add_points);
+
+        if (query.award_prize_usd != undefined) updates.total_prize_usd = parseFloat(player.total_prize_usd) + parseFloat(query.award_prize_usd);
+        
+        // Add in efficiency & maybe case where you lose?
+
+        // case query.points != undefined:
+        //     updates.total_points = parseInt(player.total_points) + parseInt(query.points);
+
+        // console.log(pid);
         // UPDATE PLAYER
         if(updates != undefined && ! await mongo.update_values(COLLECTION.PLAYER,pid,updates)){
             throw console.error(`ERROR in Updater: updating COLLECTION:${COLLECTION.PLAYER} with ID:${pid}`);
@@ -517,11 +552,14 @@ function sort_by_end_at(matches){
     return matches;
 }
 
-// ***********************************************************************************
+// *****************************************************************************************
+// 
+//                                  * EXPRESS ENDPOINTS *
+// 
+// *****************************************************************************************
 
-// ***************************** EXPRESS ENDPOINTS ***********************************
+// ************************************** PING *********************************************
 
-// GET FUNCTIONS
 app.get('/ping', (req, res, next) => {
     res.writeHead(204);
     res.write('');
@@ -529,26 +567,18 @@ app.get('/ping', (req, res, next) => {
     next();
 });
 
+// *****************************************************************************************
+
+
+// **************************** GET PLAYER FUNCTIONS ***************************************
+
+
 app.get('/player', async (req,res,next) => {
     try{
         let players = await mongo.get_values(COLLECTION.PLAYER);
         players = alphabetizePlayers(players); 
         res.writeHead(200);
         res.write(JSON.stringify(decor.players(players), null, 2));
-        res.end();
-    } catch(err){
-        console.log(err);
-    }
-    next();
-});
-
-app.get('/match', async (req,res,next) => {
-    try{
-        let matches = await mongo.get_values(COLLECTION.MATCH);
-        console.log(JSON.stringify(matches));
-        matches = sort_by_prize_usd(matches); 
-        res.writeHead(200);
-        res.write(JSON.stringify(await decor.matches(matches), null, 2));
         res.end();
     } catch(err){
         console.log(err);
@@ -575,6 +605,27 @@ app.get('/player/:pid', async (req,res,next) => {
     } 
 });
 
+// *****************************************************************************************
+
+// ******************************** GET MATCH FUNCTIONS ************************************
+
+
+app.get('/match', async (req,res,next) => {
+    try{
+        let matches = await mongo.get_values(COLLECTION.MATCH);
+        console.log(JSON.stringify(matches));
+        matches = sort_by_prize_usd(matches); 
+        res.writeHead(200);
+        res.write(JSON.stringify(await decor.matches(matches), null, 2));
+        res.end();
+    } catch(err){
+        console.log(err);
+    }
+    next();
+});
+
+
+
 app.get('/match/:mid', async (req,res,next) => {
     try {
         let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
@@ -595,7 +646,11 @@ app.get('/match/:mid', async (req,res,next) => {
     }
 });
 
-// DELETE FUNCTIONS
+// *****************************************************************************************
+
+
+// ******************************* DELETE PLAYER FUNCTIONS **********************************
+
 app.delete('/player/:pid', async (req,res,next) => {
     try {
         let {acknowledged, deletedCount} = await mongo.delete_value(COLLECTION.PLAYER,req.params.pid);
@@ -614,7 +669,11 @@ app.delete('/player/:pid', async (req,res,next) => {
     }
 });
 
-// POST FUNCTIONS
+// *****************************************************************************************
+
+
+// ********************************* POST PLAYER FUNCTIONS **********************************
+
 app.post('/player', async (req,res,next) => {
     try{
         let invalid_fields = v.new_player(req.query);
@@ -635,6 +694,71 @@ app.post('/player', async (req,res,next) => {
     }
 });
 
+app.post('/player/:pid', async (req,res,next) => {
+    try{
+        if(await v.update_player(req.query, req.params.pid)){
+            await updater.player(req.query,req.params.pid);
+            res.redirect(303, `/player/${req.params.pid}`);
+            res.end();
+        }
+        else{
+            res.writeHead(404);
+            res.end();
+        }
+        next();
+    } catch(err){
+        console.log(err);
+        next(err);
+    }
+});
+
+app.post('/deposit/player/:pid', async (req,res,next) => {
+    // Invalide balance input
+    if(!v.balance(req.query.amount_usd)){
+        res.writeHead(400);
+        res.end();
+    }
+    else{
+        let player = await mongo.get_value(COLLECTION.PLAYER,req.params.pid);
+        if(player != null){
+            let old_balance = decor.balance(player.balance_usd);
+            let deposit = decor.balance(req.query.amount_usd);
+            let new_balance = parseFloat(deposit) + parseFloat(old_balance);
+            new_balance = new_balance.toFixed(2);
+    
+            let updates = {balance_usd:new_balance};
+            if(await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates)){
+                let balance_output = decor.updated_balance(old_balance,new_balance);
+                res.writeHead(200);
+                res.write(JSON.stringify(balance_output,null,2));
+                res.end();
+            }
+            else{
+                console.log("error updating deposit");
+            }
+        }
+        else{
+            res.writeHead(404);
+            res.end();
+        }
+    }
+    next();
+});
+
+// *****************************************************************************************
+
+
+// ********************************* POST MATCH FUNCTIONS **********************************
+var PLAYER_UPDATES ={
+    active: undefined,
+    lname: undefined,
+    in_active_match: undefined,
+    join_match: undefined,
+    win: undefined,
+    dq: undefined,
+    add_points: undefined,
+    award_prize_usd: undefined
+}
 app.post('/match', async (req,res,next) => {
     try{
         // console.log(req.query);
@@ -659,9 +783,16 @@ app.post('/match', async (req,res,next) => {
             case MATCH_INPUT.VALID:
                 let mongo_player_input = db_form.new_match(req.query);
                 let name = await mongo.insert_value(COLLECTION.MATCH,mongo_player_input);
+
+                //update players
+                await updater.player({in_active_match:name.insertedId.toString(), join_match: true},req.query.pid1);
+                await updater.player({in_active_match:name.insertedId.toString(), join_match: true},req.query.pid2);
+
                 res.redirect(303, `/match/${name.insertedId.toString()}`);
                 res.end();
                 break;
+
+                
 
         }
         next();
@@ -693,6 +824,7 @@ app.post('/match/:mid/award/:pid', async (req,res,next) => {
                 break;
             case MATCH_INPUT.VALID:
                 await updater.match(input.query,input.mid,input.pid);
+                await updater.player({total_points:req.query.points},req.params.pid)
                 let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
                 res.writeHead(200);
                 res.write(JSON.stringify(await decor.match(match), null, 2))
@@ -768,60 +900,15 @@ app.post('/match/:mid/disqualify/:pid', async(req,res,next) => {
     }
 });
 
-app.post('/player/:pid', async (req,res,next) => {
-    try{
-        if(await v.update_player(req.query, req.params.pid)){
-            await updater.player(req.query,req.params.pid);
-            res.redirect(303, `/player/${req.params.pid}`);
-            res.end();
-        }
-        else{
-            res.writeHead(404);
-            res.end();
-        }
-        next();
-    } catch(err){
-        console.log(err);
-        next(err);
-    }
-});
+// *****************************************************************************************
 
-app.post('/deposit/player/:pid', async (req,res,next) => {
-    let player = await mongo.get_value(COLLECTION.PLAYER,req.params.pid);
 
-    // Invalide balance input
-    if(!v.balance(req.query.amount_usd)){
-        res.writeHead(400);
-        res.end();
-    }
-    else{
-        // player exists
-        if(player != null){
-            let old_balance = decor.balance(player.balance_usd);
-            let deposit = decor.balance(req.query.amount_usd);
-            let new_balance = parseFloat(deposit) + parseFloat(old_balance);
-            new_balance = new_balance.toFixed(2);
-    
-            let updates = {balance_usd:new_balance};
-            if(await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates)){
-                let balance_output = decor.updated_balance(old_balance,new_balance);
-                res.writeHead(200);
-                res.write(JSON.stringify(balance_output,null,2));
-                res.end();
-            }
-            else{
-                console.log("error updating deposit");
-            }
-        }
-        else{
-            res.writeHead(404);
-            res.end();
-        }
-    }
-    next();
-});
 
-// ***********************************************************************************
+// *****************************************************************************************
+// 
+//                                 * MONGODB IMPLEMENTATION *
+// 
+// *****************************************************************************************
 
 class MongoDB {
     constructor(){
@@ -920,3 +1007,5 @@ class MongoDB {
 }
 
 const mongo = new MongoDB();
+
+// ***********************************************************************************
