@@ -81,7 +81,7 @@ const WWW = {
 };
 
 const MONGO_CONNECTION = {
-  host: 'localhost',
+  host: '192.168.0.18',
   port: '27017',
   db:   'ee547_hw',
   opts: {

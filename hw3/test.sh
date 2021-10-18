@@ -9,9 +9,9 @@ function url() {
     echo "http://$HOST:$PORT$PATH"
 }
 
-# curl $CURL_OPTS -X POST $(url "/player?fname=shira&lname=s&handed=right&initial_balance_usd=0.9")
+# curl $CURL_OPTS -X POST $(url "/player?fname=shira&lname=s&handed=right&initial_balance_usd=5")
 # curl $CURL_OPTS -X POST $(url "/player?fname=will&lname=g&handed=left&initial_balance_usd=110")
-# curl $CURL_OPTS -X POST $(url "/player?fname=matt&lname=Pisini&handed=right&initial_balance_usd=0")
+# curl $CURL_OPTS -X POST $(url "/player?fname=matt&lname=Pisini&handed=right&initial_balance_usd=3")
 # curl $CURL_OPTS -X DELETE $(url "/player/615fa78057b98aedc89a422d")
 # curl $CURL_OPTS -X GET $(url "/player/615fbc1b1188dfc89717ad97")
 # curl $CURL_OPTS -X GET $(url "/player/615fbc1188dfc89717ad97")
@@ -25,6 +25,10 @@ function url() {
 
 # MATCHES
 
-curl $CURL_OPTS -X POST $(url "/match?pid1=616a5ec77e9e0c8eeffb5ded&pid2=616a5ec77e9e0c8eeffb5dee&entry_fee_usd=0.5&prize_usd=10.00")
-# curl $CURL_OPTS -X GET $(url "/match/6166819812738c119e995fb")
-# curl $CURL_OPTS -X GET $(url "/player")
+# curl $CURL_OPTS -X POST $(url "/player?fname=matt&lname=Pisini&handed=right&initial_balance_usd=3")
+# curl $CURL_OPTS -X POST $(url "/player?fname=shira&lname=s&handed=right&initial_balance_usd=5")
+
+# curl $CURL_OPTS -X POST $(url "/match?pid1=616cf0b8b8038fb798449b89&pid2=616cf0b8b8038fb798449b8a&entry_fee_usd=1&prize_usd=10.00")
+# curl $CURL_OPTS -X POST $(url "/match/616cf0d6b8038fb798449b8b/award/616cf0b8b8038fb798449b89?points=1")
+curl $CURL_OPTS -X POST $(url "/match/616cf0d6b8038fb798449b8b/disqualify/616cf0b8b8038fb798449b89")
+# curl $CURL_OPTS -X POST $(url "/match/616cea0a19976270417197dc/end/")

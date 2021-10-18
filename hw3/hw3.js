@@ -170,8 +170,6 @@ const decor = new Decorator();
 
 class Formatter {
     new_player(params){
-
-        
         let hand = this.handed(params.handed);
         let balance_value = decor.balance(params.initial_balance_usd);
     
@@ -184,6 +182,7 @@ class Formatter {
             created_at: new Date(),
             num_join: 0,
             num_won: 0,
+            num_lost: 0,
             num_dq: 0,
             total_points: 0,
             total_prize_usd: 0,
@@ -443,27 +442,34 @@ class Updater {
         
         if (query.in_active_match != undefined) updates.in_active_match = query.in_active_match;
 
-        if (query.join_match != undefined) updates.num_join = parseInt(player.num_join) + 1;
+        if (query.join_match != undefined) {
+            updates.num_join = parseInt(player.num_join) + 1;
+            updates.balance_usd = (parseFloat(player.balance_usd) - parseFloat(query.entry_fee)).toFixed(2);
+        }
         
         if (query.win != undefined){
             updates.num_won = parseInt(player.num_won) + 1;
             updates.in_active_match = null;
-        }           
+            updates.efficiency = updates.num_won / (parseInt(player.num_lost) + updates.num_won);
+            console.log(`Won: ${updates.num_won}, Lost: ${player.num_lost}, Efficiency: ${updates.efficiency}`);
+            updates.balance_usd = (parseFloat(player.balance_usd) + parseFloat(query.award_prize_usd)).toFixed(2);
+        }
+
+        if (query.lose != undefined) {
+            updates.num_lost = parseInt(player.num_lost) + 1;
+            updates.in_active_match = null;
+            updates.efficiency = player.num_won / (updates.num_lost + player.num_won);
+        }
 
         if (query.dq != undefined) {
             updates.num_dq = parseInt(player.num_dq) + 1;
             updates.in_active_match = null;
+            updates.num_lost = parseInt(player.num_lost) + 1;
+            updates.efficiency = player.num_won / (updates.num_lost + player.num_won);
         }
 
         if (query.add_points != undefined) updates.total_points = parseInt(player.total_points) + parseInt(query.add_points);
-
-        if (query.award_prize_usd != undefined) updates.total_prize_usd = parseFloat(player.total_prize_usd) + parseFloat(query.award_prize_usd);
         
-        // Add in efficiency & maybe case where you lose?
-
-        // case query.points != undefined:
-        //     updates.total_points = parseInt(player.total_points) + parseInt(query.points);
-
         // console.log(pid);
         // UPDATE PLAYER
         if(updates != undefined && ! await mongo.update_values(COLLECTION.PLAYER,pid,updates)){
@@ -477,7 +483,7 @@ class Updater {
         let match = await mongo.get_value(COLLECTION.MATCH, mid);
 
         // CHANGE PLAYER SCORE
-        if (query.is_dq == undefined && pid != null){
+        if (query.points != undefined && pid != null){
             if(match.p1_id == pid){
                 updates.p1_points = parseInt(match.p1_points) + parseInt(query.points);
             }
@@ -487,24 +493,37 @@ class Updater {
             else{
                 throw console.error("Update has no valid player");
             }
+            await this.player({add_points:query.points},pid);
         }
         
         // UPDATE VALUES
-        switch(true){
-            case query.is_dq != undefined:
-                updates.is_dq = query.is_dq;
-
-            case query.end_match == true:
-                updates.ended_at = new Date();
+        if (query.is_dq != undefined) {
+            updates.is_dq = query.is_dq;
+            if (match.p1_id == pid) {
+                await this.player({dq: true},match.p1_id);
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p2_id);
+            }
+            else {
+                await this.player({dq: true},match.p2_id);
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p1_id);
+            }
+        }
+        if (query.end_match == true) {
+            updates.ended_at = new Date();
+            if (match.p1_points > match.p2_points) {
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p1_id);
+                await this.player({lose: true},match.p2_id);
+            }
+            else {
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p2_id);
+                await this.player({lose: true},match.p1_id);
+            }
         }
 
         // PERFORM UPDATE ON MATCH
         if(! await mongo.update_values(COLLECTION.MATCH, mid, updates)){
             throw console.error(`ERROR: updating COLLECTION:${COLLECTION.MATCH} with ID:${mid}`);
         }
-
-        // UPDATE PLAYER CHANGES ??????
-        // have it call updater.player() with values to change. Need to add those to database I believe.
     }
 }
 
@@ -749,16 +768,6 @@ app.post('/deposit/player/:pid', async (req,res,next) => {
 
 
 // ********************************* POST MATCH FUNCTIONS **********************************
-var PLAYER_UPDATES ={
-    active: undefined,
-    lname: undefined,
-    in_active_match: undefined,
-    join_match: undefined,
-    win: undefined,
-    dq: undefined,
-    add_points: undefined,
-    award_prize_usd: undefined
-}
 app.post('/match', async (req,res,next) => {
     try{
         // console.log(req.query);
@@ -785,15 +794,12 @@ app.post('/match', async (req,res,next) => {
                 let name = await mongo.insert_value(COLLECTION.MATCH,mongo_player_input);
 
                 //update players
-                await updater.player({in_active_match:name.insertedId.toString(), join_match: true},req.query.pid1);
-                await updater.player({in_active_match:name.insertedId.toString(), join_match: true},req.query.pid2);
+                await updater.player({in_active_match:name.insertedId.toString(), join_match: true, entry_fee: req.query.entry_fee_usd},req.query.pid1);
+                await updater.player({in_active_match:name.insertedId.toString(), join_match: true, entry_fee: req.query.entry_fee_usd},req.query.pid2);
 
                 res.redirect(303, `/match/${name.insertedId.toString()}`);
                 res.end();
                 break;
-
-                
-
         }
         next();
     } catch(err){
@@ -824,7 +830,9 @@ app.post('/match/:mid/award/:pid', async (req,res,next) => {
                 break;
             case MATCH_INPUT.VALID:
                 await updater.match(input.query,input.mid,input.pid);
-                await updater.player({total_points:req.query.points},req.params.pid)
+
+                // TAKE OUT?
+                // await updater.player({total_points:req.query.points},req.params.pid)
                 let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
                 res.writeHead(200);
                 res.write(JSON.stringify(await decor.match(match), null, 2))
@@ -842,21 +850,17 @@ app.post('/match/:mid/end', async(req,res,next) => {
     try {
         let response = await v.end_match(req.params.mid);
         switch(response){
-            case MATCH_INPUT.DNE:
-                res.writeHead(404);
-                res.end();
-                break;
             case MATCH_INPUT.INACTIVE:
                 res.writeHead(409);
                 res.end();
                 break;
+            case MATCH_INPUT.DNE:
             case MATCH_INPUT.TIE:
                 res.writeHead(404);
                 res.end();
                 break;
             case MATCH_INPUT.VALID:
-                let updates = {end_match:true};
-                await updater.match(updates,req.params.mid)
+                await updater.match({end_match:true},req.params.mid)
                 let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
                 res.writeHead(200);
                 res.write(JSON.stringify(await decor.match(match), null, 2))
@@ -886,8 +890,7 @@ app.post('/match/:mid/disqualify/:pid', async(req,res,next) => {
                 res.end();
                 break;
             case MATCH_INPUT.VALID:
-                let updates = {end_match:true,is_dq:true};
-                await updater.match(updates,req.params.mid, req.params.pid)
+                await updater.match({is_dq:true},req.params.mid, req.params.pid)
                 let match = await mongo.get_value(COLLECTION.MATCH, req.params.mid);
                 res.writeHead(200);
                 res.write(JSON.stringify(await decor.match(match), null, 2))
