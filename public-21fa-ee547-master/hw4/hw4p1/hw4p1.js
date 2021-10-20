@@ -116,7 +116,7 @@ class Decorator {
             is_dq: match.is_dq,
             is_active: match.is_active,//(match.ended_at == null) ? true : false,
             prize_usd: match.prize_usd,
-            age: new Date() - match.created_at,
+            age: int(new Date() - match.created_at),
             ended_at: match.ended_at
         }
         for(const property in DEFAULT_MATCH_ATTR){
