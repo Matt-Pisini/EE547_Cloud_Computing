@@ -83,7 +83,7 @@ class Decorator {
 
         }
         for(const property in DEFAULT_PLAYER_ATTR){
-            if(player_output[property] == undefined) player_output[property] = DEFAULT_MATCH_ATTR[property];
+            if(player_output[property] == undefined) player_output[property] = DEFAULT_PLAYER_ATTR[property];
         }
         return player_output;
     }
@@ -695,7 +695,6 @@ app.get('/match', async (req,res,next) => {
         // console.log(inactive_matches);
 
         let matches = active_matches.concat(inactive_matches.slice(0,4));
-        console.log(matches);
         res.writeHead(200);
         res.write(JSON.stringify(await decor.matches(matches), null, 2));
         res.end();
@@ -970,7 +969,7 @@ app.post('/match/:mid/disqualify/:pid', async(req,res,next) => {
 //                                 * MONGODB IMPLEMENTATION *
 // 
 // *****************************************************************************************
-
+const StartAt = new Date();
 class MongoDB {
     constructor(){
         this.MongoDb = null;
@@ -995,14 +994,18 @@ class MongoDB {
         let mongo_json = this.read_json()
         const uri = `mongodb://${mongo_json.host}:${mongo_json.port}?useUnifiedTopology=true`;
         const MONGO_DB = `${mongo_json.db}`;
+        console.log(`Time til connect: ${new Date()-StartAt}`);
         MongoClient.connect(uri, (err, mongoConnect) => {  
             if (err) {
                 console.log(err.name);
                 exit(5);
             }
             this.MongoDb = mongoConnect.db(MONGO_DB);
+            console.log(`Time til connected: ${new Date() - StartAt}`);
             app.listen(PORT);
+            console.log(`Time til listening: ${new Date() - StartAt}`);
             console.log(`Server started, port ${PORT}`);
+            console.log(`Time til printed: ${new Date() - StartAt}`);
         });
     }
 
