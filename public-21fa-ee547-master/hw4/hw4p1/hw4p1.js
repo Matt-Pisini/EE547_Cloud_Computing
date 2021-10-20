@@ -158,13 +158,13 @@ const DEFAULT_MATCH_ATTR = {
 
 class Formatter {
     new_player(params){
-        let hand = this.handed(params.handed);
+        // let hand = this.handed(params.handed);
         let balance_value = decor.balance(params.initial_balance_usd);
     
         let new_player = {            
             fname: params.fname,
             lname: params.lname,
-            handed: hand,
+            handed: params.handed,
             is_active: true,
             balance_usd: balance_value,
             created_at: new Date(),
@@ -674,7 +674,7 @@ app.get('/match', async (req,res,next) => {
         let inactive_matches = []
         // all_matches.forEach((element, index) => {is_active});
         for(const match of all_matches){
-            if(match.is_active == true) active_matches.push(match);
+            if(match.is_active == true || match.is_active == undefined) active_matches.push(match);
             else inactive_matches.push(match);
         }
         
