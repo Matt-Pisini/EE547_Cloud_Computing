@@ -3,6 +3,7 @@
 const { json, query } = require("express");
 const express = require("express");
 const fs = require('fs');
+const { forEach } = require("mathjs");
 const { exit } = require("process");
 const app = express();
 
@@ -112,10 +113,13 @@ class Decorator {
             p2_points: match.p2_points,
             winner_pid: match.winner_pid,
             is_dq: match.is_dq,
-            is_active: match.is_active,
+            is_active: match.is_active,//(match.ended_at == null) ? true : false,
             prize_usd: match.prize_usd,
             age: new Date() - match.created_at,
             ended_at: match.ended_at
+        }
+        for(const property in DEFAULT_MATCH_ATTR){
+            if(match_output[property] == undefined) match_output[property] = DEFAULT_MATCH_ATTR[property];
         }
         return match_output;
     }
@@ -534,6 +538,7 @@ class Updater {
         }
         if (query.end_match == true) {
             updates.ended_at = new Date();
+            updates.is_active = false;
             if (match.p1_points > match.p2_points) {
                 await this.player({win: true, award_prize_usd: match.prize_usd},match.p1_id);
                 await this.player({lose: true},match.p2_id);
@@ -588,8 +593,8 @@ function sort_by_prize_usd(matches){
 
 function sort_by_end_at(matches){
     matches.sort(function(a,b) {
-        let time1 = a.ended_at.toUpperCase();
-        let time2 = b.ended_at.toUpperCase();
+        let time1 = a.ended_at;
+        let time2 = b.ended_at;
         if (time1 < time2) {return -1;}
         if (time1 > time2) {return 1;}
         return 0;
@@ -657,9 +662,27 @@ app.get('/player/:pid', async (req,res,next) => {
 
 app.get('/match', async (req,res,next) => {
     try{
-        let matches = await mongo.get_values(COLLECTION.MATCH);
-        console.log(JSON.stringify(matches));
-        matches = sort_by_prize_usd(matches); 
+        consol.log("here")
+        let all_matches = await mongo.get_values(COLLECTION.MATCH);
+        console.log(all_matches);
+        //return all active
+        // return 4 most recent inactive
+        let active_matches = []
+        let inactive_matches = []
+        // all_matches.forEach((element, index) => {is_active});
+        // for(const match of all_matches){
+            // console.log(match);
+        // }
+            // if(match.is_active == true) active_matches.push(match);
+            // else inactive_matches.push(match);
+        active_matches = sort_by_prize_usd(active_matches); 
+        // console.log("active matches\n");
+        // console.log(active_matches);
+        inactive_matches = sort_by_end_at(inactive_matches);
+        // console.log("inactive matches\n");
+        // console.log(inactive_matches);
+        // let matches = active_matches.concat(inactive_matches.slice(0,5));
+        // console.log(matches);
         res.writeHead(200);
         res.write(JSON.stringify(await decor.matches(matches), null, 2));
         res.end();
@@ -1020,9 +1043,10 @@ class MongoDB {
         }
     }
 
-    get_values(collection){
+    get_values(collection, search_value = null){
         try {
-            return this.MongoDb.collection(collection).find({}).toArray();
+            if(search_value == null) return this.MongoDb.collection(collection).find({}).toArray();
+            else return this.MongoDb.collection(collection).find(search_value).toArray()
         } catch (err) {
             console.log(err);
             next(err);

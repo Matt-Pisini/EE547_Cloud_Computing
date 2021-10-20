@@ -45,6 +45,7 @@ describe('GET /match', function() {
       const { body } = await fix.test_succeed(DEFAULT_METHOD, DEFAULT_PATH, {}, 200);
       
       const d = JSON.parse(body);
+      console.log(d);
       expect(d).to.be.an('array').with.length(1);
 
       for (const obj of d) {
@@ -102,7 +103,7 @@ describe('GET /match', function() {
     });
 
 
-    it('at most 4 not-active', async function () {
+    it.only('at most 4 not-active', async function () {
       const EXP_MAX_LENGTH = 4;
       
       // insert in order
