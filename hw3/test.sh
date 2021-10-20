@@ -21,7 +21,7 @@ function url() {
 # curl $CURL_OPTS -X POST $(url "/deposit/player/615ff3584c41ef8916512fc2?amount_usd=10a")
 # curl $CURL_OPTS -X GET $(url "/player/615fd8a3ba1cd3ef212f0773")
 # curl $CURL_OPTS -X POST $(url "/player/616667005ea00d31bcab314f?active=false")
-# curl $CURL_OPTS -X GET $(url "/player")
+curl $CURL_OPTS -X GET $(url "/match")
 
 # MATCHES
 
@@ -30,5 +30,5 @@ function url() {
 
 # curl $CURL_OPTS -X POST $(url "/match?pid1=616cf0b8b8038fb798449b89&pid2=616cf0b8b8038fb798449b8a&entry_fee_usd=1&prize_usd=10.00")
 # curl $CURL_OPTS -X POST $(url "/match/616cf0d6b8038fb798449b8b/award/616cf0b8b8038fb798449b89?points=1")
-curl $CURL_OPTS -X POST $(url "/match/616cf0d6b8038fb798449b8b/disqualify/616cf0b8b8038fb798449b89")
+# curl $CURL_OPTS -X POST $(url "/match/616cf0d6b8038fb798449b8b/disqualify/616cf0b8b8038fb798449b89")
 # curl $CURL_OPTS -X POST $(url "/match/616cea0a19976270417197dc/end/")

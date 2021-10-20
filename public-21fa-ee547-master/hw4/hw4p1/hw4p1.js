@@ -2,6 +2,7 @@
 
 const { json, query } = require("express");
 const express = require("express");
+const { MongoClient } = require('mongodb');
 const fs = require('fs');
 const { forEach } = require("mathjs");
 const { exit } = require("process");
@@ -115,7 +116,7 @@ class Decorator {
             is_dq: match.is_dq,
             is_active: match.is_active,//(match.ended_at == null) ? true : false,
             prize_usd: match.prize_usd,
-            age: new Date() - match.created_at,
+            age: int(new Date() - match.created_at),
             ended_at: match.ended_at
         }
         for(const property in DEFAULT_MATCH_ATTR){
@@ -263,7 +264,7 @@ class Validator {
     }
 
     async update_player(query, pid){
-        await updater.player({},pid);
+        // await updater.player({},pid);
         let player = await mongo.get_value(COLLECTION.PLAYER,pid);
 
         // PLAYER DNE
@@ -662,27 +663,26 @@ app.get('/player/:pid', async (req,res,next) => {
 
 app.get('/match', async (req,res,next) => {
     try{
-        consol.log("here")
         let all_matches = await mongo.get_values(COLLECTION.MATCH);
-        console.log(all_matches);
+        // console.log(all_matches);
         //return all active
         // return 4 most recent inactive
         let active_matches = []
         let inactive_matches = []
         // all_matches.forEach((element, index) => {is_active});
-        // for(const match of all_matches){
-            // console.log(match);
-        // }
-            // if(match.is_active == true) active_matches.push(match);
-            // else inactive_matches.push(match);
+        for(const match of all_matches){
+            if(match.is_active == true) active_matches.push(match);
+            else inactive_matches.push(match);
+        }
+            
         active_matches = sort_by_prize_usd(active_matches); 
         // console.log("active matches\n");
         // console.log(active_matches);
         inactive_matches = sort_by_end_at(inactive_matches);
         // console.log("inactive matches\n");
         // console.log(inactive_matches);
-        // let matches = active_matches.concat(inactive_matches.slice(0,5));
-        // console.log(matches);
+        let matches = active_matches.concat(inactive_matches.slice(0,4));
+        console.log(matches);
         res.writeHead(200);
         res.write(JSON.stringify(await decor.matches(matches), null, 2));
         res.end();
@@ -982,7 +982,6 @@ class MongoDB {
         let mongo_json = this.read_json()
         const uri = `mongodb://${mongo_json.host}:${mongo_json.port}?useUnifiedTopology=true`;
         const MONGO_DB = `${mongo_json.db}`;
-        const { MongoClient } = require('mongodb');
         MongoClient.connect(uri, (err, mongoConnect) => {  
             if (err) {
                 console.log(err.name);

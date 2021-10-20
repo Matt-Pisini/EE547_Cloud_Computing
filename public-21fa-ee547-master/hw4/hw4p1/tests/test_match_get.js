@@ -103,7 +103,7 @@ describe('GET /match', function() {
     });
 
 
-    it.only('at most 4 not-active', async function () {
+    it('at most 4 not-active', async function () {
       const EXP_MAX_LENGTH = 4;
       
       // insert in order
