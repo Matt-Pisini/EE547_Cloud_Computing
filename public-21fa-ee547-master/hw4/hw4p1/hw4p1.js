@@ -456,6 +456,7 @@ class Updater {
         let updates = {};
 
         let player = await mongo.get_value(COLLECTION.PLAYER, pid.toString());
+        if(player == null) return;
 
         for(const property in DEFAULT_PLAYER_ATTR){
             if(player[property] == undefined) updates[property] = DEFAULT_PLAYER_ATTR[property];
@@ -531,10 +532,12 @@ class Updater {
             if (match.p1_id == pid) {
                 await this.player({dq: true},match.p1_id);
                 await this.player({win: true, award_prize_usd: match.prize_usd},match.p2_id);
+                updates.winner_pid = match.p2_id;
             }
             else {
                 await this.player({dq: true},match.p2_id);
                 await this.player({win: true, award_prize_usd: match.prize_usd},match.p1_id);
+                updates.winner_pid = match.p1_id;
             }
         }
         if (query.end_match == true) {
@@ -596,8 +599,8 @@ function sort_by_end_at(matches){
     matches.sort(function(a,b) {
         let time1 = a.ended_at;
         let time2 = b.ended_at;
-        if (time1 < time2) {return -1;}
-        if (time1 > time2) {return 1;}
+        if (time1 < time2) {return 1;}
+        if (time1 > time2) {return -1;}
         return 0;
     });
     return matches;
@@ -684,7 +687,7 @@ app.get('/match', async (req,res,next) => {
         let matches = active_matches.concat(inactive_matches.slice(0,4));
         console.log(matches);
         res.writeHead(200);
-        res.write(JSON.stringify(await decor.matches(matches), null, 2));
+        // res.write(JSON.stringify(await decor.matches(matches), null, 2));
         res.end();
     } catch(err){
         console.log(err);
