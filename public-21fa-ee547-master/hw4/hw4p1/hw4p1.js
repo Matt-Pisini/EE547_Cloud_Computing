@@ -677,17 +677,18 @@ app.get('/match', async (req,res,next) => {
             if(match.is_active == true) active_matches.push(match);
             else inactive_matches.push(match);
         }
-            
-        active_matches = sort_by_prize_usd(active_matches); 
+        
+        if(active_matches.length > 0) active_matches = sort_by_prize_usd(active_matches); 
         // console.log("active matches\n");
         // console.log(active_matches);
-        inactive_matches = sort_by_end_at(inactive_matches);
+        if(inactive_matches.length > 0) inactive_matches = sort_by_end_at(inactive_matches);
         // console.log("inactive matches\n");
         // console.log(inactive_matches);
+        
         let matches = active_matches.concat(inactive_matches.slice(0,4));
         console.log(matches);
         res.writeHead(200);
-        // res.write(JSON.stringify(await decor.matches(matches), null, 2));
+        res.write(JSON.stringify(await decor.matches(matches), null, 2));
         res.end();
     } catch(err){
         console.log(err);
