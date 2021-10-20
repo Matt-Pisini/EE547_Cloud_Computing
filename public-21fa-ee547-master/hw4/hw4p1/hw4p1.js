@@ -29,6 +29,12 @@ const MATCH_INPUT = {
     VALID: 6
 }
 
+const HANDED_MAP ={
+    A: 'ambi',
+    L: 'left',
+    R: 'right'
+}
+
 
 // ***************************** DECORATE CLASS ***********************************
 // Used to output data in a specified fashion.
@@ -64,7 +70,7 @@ class Decorator {
         let player_output = {
             pid: player._id,
             name: name,
-            handed: player.handed,
+            handed: (HANDED_MAP[player.handed]) ? HANDED_MAP[player.handed] : player.handed,
             is_active: player.is_active,
             num_join: player.num_join,
             num_won: player.num_won,
@@ -75,6 +81,9 @@ class Decorator {
             efficiency: player.efficiency,
             in_active_match: player.in_active_match,
 
+        }
+        for(const property in DEFAULT_PLAYER_ATTR){
+            if(player_output[property] == undefined) player_output[property] = DEFAULT_MATCH_ATTR[property];
         }
         return player_output;
     }
@@ -116,7 +125,7 @@ class Decorator {
             is_dq: match.is_dq,
             is_active: match.is_active,//(match.ended_at == null) ? true : false,
             prize_usd: match.prize_usd,
-            age: int(new Date() - match.created_at),
+            age: new Date() - match.created_at,
             ended_at: match.ended_at
         }
         for(const property in DEFAULT_MATCH_ATTR){
