@@ -77,7 +77,7 @@ class Decorator {
             num_dq: player.num_dq,
             balance_usd: player.balance_usd,
             total_points: player.total_points,
-            total_prize_usd: player.total_prize_usd,
+            total_prize_usd: this.balance(player.total_prize_usd),
             efficiency: player.efficiency,
             in_active_match: player.in_active_match,
 
@@ -994,18 +994,18 @@ class MongoDB {
         let mongo_json = this.read_json()
         const uri = `mongodb://${mongo_json.host}:${mongo_json.port}?useUnifiedTopology=true`;
         const MONGO_DB = `${mongo_json.db}`;
-        console.log(`Time til connect: ${new Date()-StartAt}`);
+        // console.log(`Time til connect: ${new Date()-StartAt}`);
         MongoClient.connect(uri, (err, mongoConnect) => {  
             if (err) {
                 console.log(err.name);
                 exit(5);
             }
             this.MongoDb = mongoConnect.db(MONGO_DB);
-            console.log(`Time til connected: ${new Date() - StartAt}`);
+            // console.log(`Time til connected: ${new Date() - StartAt}`);
             app.listen(PORT);
-            console.log(`Time til listening: ${new Date() - StartAt}`);
+            // console.log(`Time til listening: ${new Date() - StartAt}`);
             console.log(`Server started, port ${PORT}`);
-            console.log(`Time til printed: ${new Date() - StartAt}`);
+            // console.log(`Time til printed: ${new Date() - StartAt}`);
         });
     }
 
