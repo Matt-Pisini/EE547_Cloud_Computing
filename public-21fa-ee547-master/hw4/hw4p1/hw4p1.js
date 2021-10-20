@@ -77,7 +77,7 @@ class Decorator {
             num_dq: player.num_dq,
             balance_usd: player.balance_usd,
             total_points: player.total_points,
-            total_prize_usd: this.balance(player.total_prize_usd),
+            total_prize_usd: player.total_prize_usd,
             efficiency: player.efficiency,
             in_active_match: player.in_active_match,
 
@@ -152,7 +152,7 @@ const DEFAULT_PLAYER_ATTR = {
     num_lost: 0,
     num_dq: 0,
     total_points: 0,
-    total_prize_usd: 0,
+    total_prize_usd: '0.00',
     efficiency: 0.0,
     in_active_match: null
 }
