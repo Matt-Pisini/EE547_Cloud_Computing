@@ -264,7 +264,7 @@ class Validator {
     }
 
     async update_player(query, pid){
-        // await updater.player({},pid);
+        await updater.player({},pid);
         let player = await mongo.get_value(COLLECTION.PLAYER,pid);
 
         // PLAYER DNE
