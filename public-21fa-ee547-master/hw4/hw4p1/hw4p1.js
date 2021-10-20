@@ -678,13 +678,13 @@ app.get('/match', async (req,res,next) => {
             else inactive_matches.push(match);
         }
         
-        if(active_matches.length > 0) active_matches = sort_by_prize_usd(active_matches); 
+        active_matches = sort_by_prize_usd(active_matches); 
         // console.log("active matches\n");
         // console.log(active_matches);
-        if(inactive_matches.length > 0) inactive_matches = sort_by_end_at(inactive_matches);
+        inactive_matches = sort_by_end_at(inactive_matches);
         // console.log("inactive matches\n");
         // console.log(inactive_matches);
-        
+
         let matches = active_matches.concat(inactive_matches.slice(0,4));
         console.log(matches);
         res.writeHead(200);
