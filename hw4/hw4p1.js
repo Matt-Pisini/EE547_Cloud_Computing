@@ -40,22 +40,19 @@ const HANDED_MAP ={
 // Used to output data in a specified fashion.
 
 class Decorator {
-    // balance(balance){
-    //     let money = balance.split(".");
-    //     let balance_value = 0;
-    //     if(money[1] == undefined || money[1] == ""){
-    //         balance_value = money[0] + ".00";
-    //     }
-    //     else if (money[1].length == 1){
-    //         balance_value = money[0] + "." + money[1] + "0";
-    //     }
-    //     else {
-    //         balance_value = money[0] + "." + money[1];
-    //     }
-    //     return balance_value;
-    // }
     balance(balance){
-        return (balance/100).toFixed(2);
+        let money = balance.split(".");
+        let balance_value = 0;
+        if(money[1] == undefined || money[1] == ""){
+            balance_value = money[0] + ".00";
+        }
+        else if (money[1].length == 1){
+            balance_value = money[0] + "." + money[1] + "0";
+        }
+        else {
+            balance_value = money[0] + "." + money[1];
+        }
+        return balance_value;
     }
 
     name(fname,lname){
@@ -78,9 +75,9 @@ class Decorator {
             num_join: player.num_join,
             num_won: player.num_won,
             num_dq: player.num_dq,
-            balance_usd: this.balance(player.balance_usd_cents),
+            balance_usd: player.balance_usd,
             total_points: player.total_points,
-            total_prize_usd: this.balance(player.total_prize_usd_cents),
+            total_prize_usd: player.total_prize_usd,
             efficiency: player.efficiency,
             in_active_match: player.in_active_match,
 
@@ -101,8 +98,8 @@ class Decorator {
 
     updated_balance(old_balance, new_balance){
         let updated_balance_output = {
-            old_balance_usd: this.balance(old_balance),
-            new_balance_usd: this.balance(new_balance)
+            old_balance_usd: old_balance,
+            new_balance_usd: new_balance
         };
         return updated_balance_output;
     }
@@ -117,7 +114,7 @@ class Decorator {
 
         let match_output = {
             mid: match._id,
-            entry_fee_usd: match.entry_fee_usd_cents,
+            entry_fee_usd: match.entry_fee_usd,
             p1_id: match.p1_id,
             p1_name: name1,
             p1_points: match.p1_points,
@@ -127,7 +124,7 @@ class Decorator {
             winner_pid: match.winner_pid,
             is_dq: match.is_dq,
             is_active: match.is_active,//(match.ended_at == null) ? true : false,
-            prize_usd: this.balance(match.prize_usd_cents),
+            prize_usd: match.prize_usd,
             age: new Date() - match.created_at,
             ended_at: match.ended_at
         }
@@ -155,17 +152,7 @@ const DEFAULT_PLAYER_ATTR = {
     num_lost: 0,
     num_dq: 0,
     total_points: 0,
-    total_prize_usd: 0,
-    efficiency: 0.0,
-    in_active_match: null
-}
-const DB_DEFAULT_PLAYER_ATTR = {
-    num_join: 0,
-    num_won: 0,
-    num_lost: 0,
-    num_dq: 0,
-    total_points: 0,
-    total_prize_usd_cents: 0,
+    total_prize_usd: '0.00',
     efficiency: 0.0,
     in_active_match: null
 }
@@ -188,14 +175,14 @@ class Formatter {
             lname: params.lname,
             handed: params.handed,
             is_active: true,
-            balance_usd_cents: balance_value,
+            balance_usd: balance_value,
             created_at: new Date(),
             num_join: 0,
             num_won: 0,
             num_lost: 0,
             num_dq: 0,
             total_points: 0,
-            total_prize_usd_cents: 0,
+            total_prize_usd: 0,
             efficiency: 0.0,
             in_active_match: null
         }
@@ -229,14 +216,14 @@ class Formatter {
         let new_match = {            
             created_at: new Date(),
             ended_at: null,
-            entry_fee_usd_cents: decor.balance(params.entry_fee_usd),
+            entry_fee_usd: decor.balance(params.entry_fee_usd),
             is_dq: false,
             p1_id: params.p1_id,
             p1_points: 0,
             p2_id: params.p2_id,
             p2_points: 0,
             winner_pid: null,
-            prize_usd_cents: decor.balance(params.prize_usd)
+            prize_usd: decor.balance(params.prize_usd)
         }
         return new_match;
     }
@@ -384,10 +371,10 @@ class Validator {
         if(!this.balance(query.entry_fee_usd) || !this.balance(query.prize_usd)){
             return MATCH_INPUT.OTHER;
         }
-        if(!this.player_balance_sufficient(player1.balance_usd_cents, query.entry_fee_usd)){
+        if(!this.player_balance_sufficient(player1.balance_usd, query.entry_fee_usd)){
             return MATCH_INPUT.INSUFFICIENT_BAL;
         }
-        if(!this.player_balance_sufficient(player2.balance_usd_cents, query.entry_fee_usd)){
+        if(!this.player_balance_sufficient(player2.balance_usd, query.entry_fee_usd)){
             return MATCH_INPUT.INSUFFICIENT_BAL;
         }
         
@@ -439,7 +426,7 @@ class Validator {
     }
 
     player_balance_sufficient(balance, entry_fee){
-        return (parseFloat(balance)/100 > parseFloat(entry_fee)) ? 1 : 0;
+        return (parseFloat(balance) > parseFloat(entry_fee)) ? 1 : 0;
     }
 
     points(value){
@@ -480,8 +467,8 @@ class Updater {
         let player = await mongo.get_value(COLLECTION.PLAYER, pid.toString());
         if(player == null) return;
 
-        for(const property in DB_DEFAULT_PLAYER_ATTR){
-            if(player[property] == undefined) updates[property] = DB_DEFAULT_PLAYER_ATTR[property];
+        for(const property in DEFAULT_PLAYER_ATTR){
+            if(player[property] == undefined) updates[property] = DEFAULT_PLAYER_ATTR[property];
         }
 
         if (query.active != undefined) updates.is_active = db_form.active(query.active);
@@ -492,7 +479,7 @@ class Updater {
 
         if (query.join_match != undefined) {
             updates.num_join = (player.num_join) ? parseInt(player.num_join) + 1 : 1;
-            updates.balance_usd_cents = (parseFloat(player.balance_usd_cents) - parseFloat(query.entry_fee)).toFixed();
+            updates.balance_usd = (parseFloat(player.balance_usd) - parseFloat(query.entry_fee)).toFixed(2);
         }
         
         if (query.win != undefined){
@@ -500,7 +487,7 @@ class Updater {
             updates.in_active_match = null;
             player.num_lost = (player.num_lost) ? player.num_lost : 0;
             updates.efficiency = updates.num_won / (parseInt(player.num_lost) + updates.num_won);
-            updates.balance_usd_cents = (parseFloat(player.balance_usd_cents) + parseFloat(query.award_prize_usd)).toFixed();
+            updates.balance_usd = (parseFloat(player.balance_usd) + parseFloat(query.award_prize_usd)).toFixed(2);
         }
 
         if (query.lose != undefined) {
@@ -553,12 +540,12 @@ class Updater {
             updates.ended_at = new Date();
             if (match.p1_id == pid) {
                 await this.player({dq: true},match.p1_id);
-                await this.player({win: true, award_prize_usd: match.prize_usd_cents},match.p2_id);
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p2_id);
                 updates.winner_pid = match.p2_id;
             }
             else {
                 await this.player({dq: true},match.p2_id);
-                await this.player({win: true, award_prize_usd: match.prize_usd_cents},match.p1_id);
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p1_id);
                 updates.winner_pid = match.p1_id;
             }
         }
@@ -566,12 +553,12 @@ class Updater {
             updates.ended_at = new Date();
             updates.is_active = false;
             if (match.p1_points > match.p2_points) {
-                await this.player({win: true, award_prize_usd: match.prize_usd_cents},match.p1_id);
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p1_id);
                 await this.player({lose: true},match.p2_id);
                 updates.winner_pid = match.p1_id;
             }
             else {
-                await this.player({win: true, award_prize_usd: match.prize_usd_cents},match.p2_id);
+                await this.player({win: true, award_prize_usd: match.prize_usd},match.p2_id);
                 await this.player({lose: true},match.p1_id);
                 updates.winner_pid = match.p2_id;
             }
@@ -608,8 +595,8 @@ function alphabetizePlayers(players){
 
 function sort_by_prize_usd(matches){
     matches.sort(function(a,b) {
-        let prize1 = parseFloat(a.prize_usd_cents);
-        let prize2 = parseFloat(b.prize_usd_cents);
+        let prize1 = parseFloat(a.prize_usd);
+        let prize2 = parseFloat(b.prize_usd);
         if (prize1 < prize2) {return 1;}
         if (prize1 > prize2) {return -1;}
         return 0;
@@ -813,13 +800,12 @@ app.post('/deposit/player/:pid', async (req,res,next) => {
     else{
         let player = await mongo.get_value(COLLECTION.PLAYER,req.params.pid);
         if(player != null){
-            let old_balance = player.balance_usd_cents;
-            // let deposit = decor.balance(req.query.amount_usd);
-            let deposit = parseFloat(req.query.amount_usd)*100;
+            let old_balance = decor.balance(player.balance_usd);
+            let deposit = decor.balance(req.query.amount_usd);
             let new_balance = parseFloat(deposit) + parseFloat(old_balance);
-            new_balance = new_balance;
+            new_balance = new_balance.toFixed(2);
     
-            let updates = {balance_usd_cents:new_balance};
+            let updates = {balance_usd:new_balance};
             if(await mongo.update_values(COLLECTION.PLAYER,req.params.pid, updates)){
                 let balance_output = decor.updated_balance(old_balance,new_balance);
                 res.writeHead(200);
