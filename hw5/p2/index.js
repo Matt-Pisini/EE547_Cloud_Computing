@@ -10,6 +10,11 @@ const app = express();
 
 const { MongoClient } = require('mongodb');
 const { forEach } = require("mathjs");
+const DataLoader = require('dataloader');
+
+const MONGO_COLLECTION = {MATCH:"match",PLAYER:"player"};
+
+
 class MongoDB {
     constructor(){
         this.mongo_config = {"host":"192.168.0.18","port":"27017","db":"ee547_hw","opts":{"useUnifiedTopology":true}}
@@ -58,9 +63,50 @@ class MongoDB {
             console.log(err);
         }
     }
+    create_loaders() {
+        return {
+            match: new DataLoader(ids => this._batch(MONGO_COLLECTION.MATCH, ids)),
+            player: new DataLoader(ids => this._batch(MONGO_COLLECTION.PLAYER, ids)),
+        }
+    }
+    async _batch(collection, ids = []){
+        const obj_ids = ids.map(obj => new this.ObjectId(obj));
+        // console.log(obj_ids);
+        return this.connection.collection(collection).find({_id: {$in:obj_ids}})
+            .toArray()
+            .then(docs => {
+                // console.log(docs);
+                docs.forEach(doc => Object.keys(doc).forEach(k => {
+                    if(k == "_id") {
+                        doc.pid = doc[k].toString();
+                    }
+                    // delete doc.k;
+                    // console.log(k, doc[k]);
+                }));
+                // console.log(docs);
+                const IDtoDoc = {};
+                for (const obj of docs){
+                    IDtoDoc[obj._id.toString()] = obj;
+                    delete IDtoDoc[obj._id.toString()]._id;
+                }
+
+                const docById = {};
+                for (let id of ids) {
+                    if(id in IDtoDoc) docById[id] = IDtoDoc[id];
+                    else docById[id] = null;
+                }
+                console.log(docById);
+                // let temp = docById.reduce(k => {
+                //     console.log(k);
+                // })
+                // console.log(temp);
+                return ids.map(id => docById[id] || null);
+            })
+
+    }
 
 }
-const mongo = new MongoDB();
+const db = new MongoDB();
 
 const typeDefs = readFileSync('./schema.graphql').toString('utf-8');
 // const resolvers = require('./resolvers');
@@ -68,15 +114,25 @@ const typeDefs = readFileSync('./schema.graphql').toString('utf-8');
 const resolvers = {
     Query: {
         player: (_, { pid }, context) => {
-            return context.db.get_player(pid).then(data => data ? {pid} : null);
+            // return context.db.get_player(pid).then(data => data ? {pid} : null);
+            return context.loader.player.load(pid).then(data => data ? {pid} : null);
         },
         players: async (_, {limit, offset, sort}, context) => {
-            return context.db.get_players().then(data => data.map(pid => {
-                return {pid:pid._id.toString()}
+            
+            let ids = await db.connection.collection(MONGO_COLLECTION.PLAYER).distinct("_id");
+            ids = ids.map(id => id.toString());
+            return context.loader.player.loadMany(ids).then(data => data.map(pid => {
+                return pid;
             }));
+            // return context.loader.player.loadMany(ids).then(data => );
+            // return context.db.get_players().then(data => data.map(pid => {
+            //     console.log(pid);
+            //     return {pid:pid._id.toString()}
+            // }));
         },
         match: (_, { mid }, context) => {
-            return context.db.get_match(mid).then(data => data ? {mid} : null);
+            return context.loader.match.load(mid).then(data => data ? {mid} : null);
+            // return context.db.get_match(mid).then(data => data ? {mid} : null);
         },
         matches: (_, {limit, offset, sort}, context) => {
             return context.db.get_players().then(data => data.map(mid => {
@@ -101,7 +157,7 @@ const resolvers = {
         //     return context.db.get_player(pid).then(data => data.fname ? data.fname : null);
         // },
         fname: ({ pid },_, context) => {
-            return context.db.get_player(pid).then(data => data.fname ? data.fname : null);
+            return context.loader.player.load(pid).then(data => data.fname ? data.fname : null);
         },
         // handed: ({ pid },_, context) => {
         //     return context.db.get_player(pid).then(data => data.handed ? data.handed : null);
@@ -113,7 +169,7 @@ const resolvers = {
         //     return context.db.get_player(pid).then(data => data.is_active ? data.is_active : true);
         // },
         lname: ({ pid },_, context) => {
-            return context.db.get_player(pid).then(data => data.lname ? data.lname : null);
+            return context.loader.player.load(pid).then(data => data.lname ? data.lname : null);
         },
         // name: ({ pid },_, context) => {
         //     return context.db.get_player(pid).then(data => data.name ? data.nname : null);
@@ -157,8 +213,8 @@ app.use('/graphql', graphqlHTTP(async (req) => {
         graphiql: true,
         context: {
             req,
-            db: mongo,
-            userCache: {}
+            db,
+            loader: db.create_loaders(),
         }
     };
 }));
