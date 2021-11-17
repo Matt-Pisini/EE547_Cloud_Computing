@@ -285,28 +285,28 @@ const resolvers = {
             await context.db.update_player(context,pid,playerInput);
             return {pid};
         },
-        playerDelete: (_, { pid }, context) => {
-            context.db.delete_player(context, pid);
+        playerDelete: async (_, { pid }, context) => {
+            await context.db.delete_player(context, pid);
             return true;
         },
         playerCreate: async (_, {playerInput}, context) => {
             let {insertedId} = await context.db.add_player(context, playerInput);
             return{pid:insertedId.toString()};
         },
-        playerDeposit: (_, {pid, amount_usd_cents},  context) => {
-            context.db.player_deposit(context,pid,amount_usd_cents);
+        playerDeposit: async (_, {pid, amount_usd_cents},  context) => {
+            await context.db.player_deposit(context,pid,amount_usd_cents);
             return {pid};
         },
         matchCreate: async (_, {entry_fee_usd_cents, prize_usd_cents, pid1, pid2}, context) => {
             let insertedId = await context.db.add_match(context, pid1, pid2, entry_fee_usd_cents, prize_usd_cents);
             return {mid:insertedId};
         },
-        matchAward: (_, {mid, pid, points}, context) => {
-            context.db.match_points(context,mid,pid,points);
+        matchAward: async (_, {mid, pid, points}, context) => {
+            await context.db.match_points(context,mid,pid,points);
             return {mid};
         },
-        matchDisqualify: (_, {mid, pid}, context) => {
-            context.db.match_disqualify(context,mid,pid);
+        matchDisqualify: async (_, {mid, pid}, context) => {
+            await context.db.match_disqualify(context,mid,pid);
             return {mid};
         },
         matchEnd: (_, {mid}, context) => {
