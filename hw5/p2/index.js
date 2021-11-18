@@ -43,10 +43,15 @@ const DEFAULT_MATCH_ATTR = {
     p2_points: 0,
     winner_pid: null,
     is_active: true,
-    winner: null
+    winner: null,
+    created_at: new Date()
 }
 const MATCH_DQ = {
     is_dq:true,
+    is_active:false,
+    ended_at: new Date()
+}
+const MATCH_END = {
     is_active:false,
     ended_at: new Date()
 }
@@ -105,6 +110,7 @@ class MongoDB {
             else throw `${fname} is not a valid string`;
             if(v.name(lname))new_player.lname = lname;
             else throw `${lname} is not a valid string`;
+            if(initial_balance_usd_cents < 0) throw `Initial balance must be greater than 0`;
             new_player.handed = handed;
             new_player.balance_usd_cents = initial_balance_usd_cents;
             new_player.name = (lname) ? fname + lname : fname;
@@ -126,6 +132,8 @@ class MongoDB {
     }
     async add_match(context, pid_1, pid_2, entry_fee_usd_cents, prize_usd_cents) {
         try{
+            if(entry_fee_usd_cents < 0) throw `entry_fee_usd_cents must be greater than 0`;
+            if(prize_usd_cents < 0) throw `prize_usd_cents must be greater than 0`;
             if(await this.is_player_active(context, pid_1) || !(await this.is_balance_sufficient(context,pid_1,entry_fee_usd_cents) )){
                 throw "player 1 error";
             } 
@@ -163,34 +171,69 @@ class MongoDB {
         await context.loader.match.clear(mid);
     }
     async match_disqualify(context,mid,pid){
-        const {p1, p2,prize_usd_cents} = await context.loader.match.load(mid);
-        let winner = null; 
-        let loser = null;
-        
-        if(pid == p1){
-            winner = p2;
-            loser = p1;
-        }
-        else if (pid == p2){
-            winner = p1;
-            loser = p2;
-        }
-        else throw `no player matches pid:${pid}`
+        try{
+            const {p1, p2,prize_usd_cents, is_active} = await context.loader.match.load(mid);
+            let winner = null; 
+            let loser = null;
+            // console.log(pid)
+            // console.log(p1)
+            // console.log(p2)
+            if(!is_active) throw `Match ${mid} has already ended`;
+            if(pid == p1){
+                winner = p2;
+                loser = p1;
+            }
+            else if (pid == p2){
+                winner = p1;
+                loser = p2;
+            }
+            else throw `no player matches pid:${pid}`
 
-        await this.player_dq(context, loser, winner, prize_usd_cents);
-        let update = Object.create(MATCH_DQ)
-        update.winner = winner;
-        await this.connection.collection(MONGO_COLLECTION.MATCH).updateOne({_id: this.ObjectId(mid)}, {$set:update});
-        await context.loader.match.clear(mid);
+            let update = Object.create(MATCH_DQ)
+            update.winner = winner;
+
+            await this.players_end_match(context, loser, winner, prize_usd_cents, true);
+            await this.match_change_field(context,mid,update);
+        } catch(err){
+            console.log(err);
+        }
+    }
+    async match_end(context, mid){
+        try{
+            const {p1, p1_points, p2, p2_points, prize_usd_cents, is_active} = await context.loader.match.load(mid);
+            let winner = null;
+            let loser = null;
+            if(!is_active) throw `Match ${mid} has already ended`;
+            if(p1_points == p2_points) throw `Can't end match in tie`;
+            else if (p1_points < p2_points) {
+                winner = p2;
+                loser = p1;
+            }
+            else {
+                winner = p1;
+                loser = p2;
+            }
+            let update = Object.create(MATCH_END);
+            update.winner = winner;
+            console.log(update.winner);
+            await this.players_end_match(context,loser, winner, prize_usd_cents, false);
+            await this.match_change_field(context,mid,update);
+        } catch(err){
+            console.log(err);
+        }
     }
 
-    async player_dq(context,pid_dq, pid_win, award){
-        await this.player_add_field(context,pid_dq,{num_dq:1});
-        await this.player_change_field(context,pid_dq,{in_active_match:null});
-        await this.player_add_field(context,pid_win,{num_won:1,total_prize_usd_cents:award,balance_usd_cents:award});
-        await this.player_change_field(context,pid_win,{in_active_match:null});
-        await context.loader.player.clear(pid_dq);
-        await context.loader.player.clear(pid_win);
+    async players_end_match(context,pid_loser, pid_winner, award, is_dq = false){
+        if(is_dq) //DQ end
+        {    
+            await this.player_add_field(context,pid_loser,{num_dq:1});
+        }
+
+        await this.player_change_field(context,pid_loser,{in_active_match:null});
+        await this.player_add_field(context,pid_winner,{num_won:1,total_prize_usd_cents:award,balance_usd_cents:award});
+        await this.player_change_field(context,pid_winner,{in_active_match:null});
+        await context.loader.player.clear(pid_loser);
+        await context.loader.player.clear(pid_winner);
     }
     async player_join_match(context, pid, cost, mid) {
         await this.connection.collection(MONGO_COLLECTION.PLAYER).updateOne({_id: this.ObjectId(pid)}, {$inc:{balance_usd_cents: -cost,num_join:1},$set:{in_active_match:mid}});
@@ -204,13 +247,18 @@ class MongoDB {
         await this.connection.collection(MONGO_COLLECTION.PLAYER).updateOne({_id: this.ObjectId(pid)}, {$set:updates});
         await context.loader.player.clear(pid);
     }
+    async match_change_field(context, mid, updates){
+        console.log(updates)
+        await this.connection.collection(MONGO_COLLECTION.MATCH).updateOne({_id: this.ObjectId(mid)}, {$set:updates});
+        await context.loader.match.clear(mid);
+    }
     async is_player_active(context, pid){
         const {in_active_match, is_active} = await context.loader.player.load(pid);
         return (in_active_match || !is_active) ? true : false;
     }
     async is_balance_sufficient(context, pid, cost){
         const {balance_usd_cents} = await context.loader.player.load(pid);
-        return (balance_usd_cents > cost);
+        return (balance_usd_cents >= cost);
     }
 
     create_loaders() {
@@ -290,18 +338,27 @@ const resolvers = {
             return true;
         },
         playerCreate: async (_, {playerInput}, context) => {
-            let {insertedId} = await context.db.add_player(context, playerInput);
-            return{pid:insertedId.toString()};
+            try {
+                let {insertedId} = await context.db.add_player(context, playerInput);
+                return{pid:insertedId.toString()};
+            } catch(err){
+                console.log(err);
+            }
         },
         playerDeposit: async (_, {pid, amount_usd_cents},  context) => {
             await context.db.player_deposit(context,pid,amount_usd_cents);
             return {pid};
         },
         matchCreate: async (_, {entry_fee_usd_cents, prize_usd_cents, pid1, pid2}, context) => {
-            let insertedId = await context.db.add_match(context, pid1, pid2, entry_fee_usd_cents, prize_usd_cents);
-            return {mid:insertedId};
+            try {
+                let insertedId = await context.db.add_match(context, pid1, pid2, entry_fee_usd_cents, prize_usd_cents);
+                return {mid:insertedId};
+            } catch(err){
+                console.log(err);
+            }
         },
         matchAward: async (_, {mid, pid, points}, context) => {
+            if(points <= 0) throw `Points awarded must be greater than 0`;
             await context.db.match_points(context,mid,pid,points);
             return {mid};
         },
@@ -309,8 +366,9 @@ const resolvers = {
             await context.db.match_disqualify(context,mid,pid);
             return {mid};
         },
-        matchEnd: (_, {mid}, context) => {
-            
+        matchEnd: async (_, {mid}, context) => {
+            await context.db.match_end(context, mid);
+            return {mid};
         }
     },
     Player: {
@@ -359,7 +417,7 @@ const resolvers = {
     },
     Match: {
         age: async ({ mid }, _, context) => {
-
+            return context.loader.match.load(mid).then(data => !data.is_active ? parseInt( (new Date - data.created_at) / 1e3, 10) : null)
         },
         ended_at: ({ mid }, _, context) => {
             return context.loader.match.load(mid).then(data => data.ended_at ? data.ended_at : null)
@@ -395,16 +453,16 @@ const resolvers = {
         },
         winner: ({ mid }, _, context) => {
           return context.loader.match.load(mid)
-          .then(({ winner_pid }) => (winner_pid ? { pid: winner_pid } : null));
+          .then(data => {return {pid:data.winner}});
         }
       },
 }
 const schema = makeExecutableSchema({
     resolvers,
-    // resolverValidationOptions: {
-    //     // requireResolversForAllFields: 'warn',
+    resolverValidationOptions: {
+        requireResolversForAllFields: 'warn',
         requireResolversToMatchSchema: 'warn',
-    // },
+    },
     typeDefs
 });
 
