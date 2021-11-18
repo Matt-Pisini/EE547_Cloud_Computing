@@ -269,20 +269,16 @@ class MongoDB {
     }
     async _batch(collection, ids = []){
         const obj_ids = ids.map(obj => new this.ObjectId(obj));
-        // console.log(obj_ids);
         return this.connection.collection(collection).find({_id: {$in:obj_ids}})
             .toArray()
             .then(docs => {
-                // console.log(docs);
                 docs.forEach(doc => Object.keys(doc).forEach(k => {
                     if(k == "_id") {
                         if(collection == MONGO_COLLECTION.PLAYER) doc.pid = doc[k].toString();
                         else doc.mid = doc[k].toString();
                     }
-                    // delete doc.k;
-                    // console.log(k, doc[k]);
                 }));
-                // console.log(docs);
+
                 const IDtoDoc = {};
                 for (const obj of docs){
                     IDtoDoc[obj._id.toString()] = obj;
@@ -294,11 +290,7 @@ class MongoDB {
                     if(id in IDtoDoc) docById[id] = IDtoDoc[id];
                     else docById[id] = null;
                 }
-                // console.log(docById);
-                // let temp = docById.reduce(k => {
-                //     console.log(k);
-                // })
-                // console.log(temp);
+
                 return ids.map(id => docById[id] || null);
             })
 
