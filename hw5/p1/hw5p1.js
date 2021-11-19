@@ -55,7 +55,8 @@ class Decorator {
     //     return balance_value;
     // }
     balance(balance){
-        return (balance/100).toFixed(2);
+        // return (balance/100).toFixed(2);
+        return parseInt(balance);
     }
 
     name(fname,lname){
@@ -78,9 +79,9 @@ class Decorator {
             num_join: player.num_join,
             num_won: player.num_won,
             num_dq: player.num_dq,
-            balance_usd: this.balance(player.balance_usd_cents),
+            balance_usd_cents: this.balance(player.balance_usd_cents),
             total_points: player.total_points,
-            total_prize_usd: this.balance(player.total_prize_usd_cents),
+            total_prize_usd_cents: (player.total_prize_usd_cents) ? player.total_prize_usd_cents : 0,
             efficiency: player.efficiency,
             in_active_match: player.in_active_match,
 
@@ -101,8 +102,8 @@ class Decorator {
 
     updated_balance(old_balance, new_balance){
         let updated_balance_output = {
-            old_balance_usd: this.balance(old_balance),
-            new_balance_usd: this.balance(new_balance)
+            old_balance_usd_cents: this.balance(old_balance),
+            new_balance_usd_cents: this.balance(new_balance)
         };
         return updated_balance_output;
     }
@@ -117,7 +118,7 @@ class Decorator {
 
         let match_output = {
             mid: match._id,
-            entry_fee_usd: match.entry_fee_usd_cents,
+            entry_fee_usd_cents: match.entry_fee_usd_cents,
             p1_id: match.p1_id,
             p1_name: name1,
             p1_points: match.p1_points,
@@ -127,7 +128,7 @@ class Decorator {
             winner_pid: match.winner_pid,
             is_dq: match.is_dq,
             is_active: match.is_active,//(match.ended_at == null) ? true : false,
-            prize_usd: this.balance(match.prize_usd_cents),
+            prize_usd_cents: this.balance(match.prize_usd_cents),
             age: new Date() - match.created_at,
             ended_at: match.ended_at
         }
@@ -155,7 +156,7 @@ const DEFAULT_PLAYER_ATTR = {
     num_lost: 0,
     num_dq: 0,
     total_points: 0,
-    total_prize_usd: 0,
+    total_prize_usd_cents: 0,
     efficiency: 0.0,
     in_active_match: null
 }
@@ -181,14 +182,14 @@ const DEFAULT_MATCH_ATTR = {
 class Formatter {
     new_player(params){
         // let hand = this.handed(params.handed);
-        let balance_value = decor.balance(params.initial_balance_usd);
+        // let balance_value = decor.balance();
     
         let new_player = {            
             fname: params.fname,
             lname: params.lname,
             handed: params.handed,
             is_active: true,
-            balance_usd_cents: balance_value,
+            balance_usd_cents: params.initial_balance_usd_cents,
             created_at: new Date(),
             num_join: 0,
             num_won: 0,
@@ -229,14 +230,14 @@ class Formatter {
         let new_match = {            
             created_at: new Date(),
             ended_at: null,
-            entry_fee_usd_cents: decor.balance(params.entry_fee_usd),
+            entry_fee_usd_cents: decor.balance(params.entry_fee_usd_cents),
             is_dq: false,
             p1_id: params.p1_id,
             p1_points: 0,
             p2_id: params.p2_id,
             p2_points: 0,
             winner_pid: null,
-            prize_usd_cents: decor.balance(params.prize_usd)
+            prize_usd_cents: decor.balance(params.prize_usd_cents)
         }
         return new_match;
     }
@@ -278,10 +279,10 @@ class Validator {
         }
         
         // Check initial Balance
-        if (!this.balance(params.initial_balance_usd)){
-            invalid_fields.push("initial_balance_usd");
+        if (!this.balance(params.initial_balance_usd_cents)){
+            invalid_fields.push("balance_usd_cents");
         }
-    
+
         return invalid_fields;
     }
 
@@ -310,7 +311,11 @@ class Validator {
         if(balance == ""){
             return 0;
         }
-        let money = balance.split(".");
+        // let money = balance.split(".");
+        if(/[^0-9]/i.test(balance)) return 0;
+        if(balance.match(/[.]/) != null)  return 0;
+        if(balance < 0) return 0;
+        return 1;
         if(/[^0-9]/i.test(money[0])){
             return 0;
         }
@@ -381,13 +386,13 @@ class Validator {
         if(this.player_active(player2.in_active_match)){
             return MATCH_INPUT.ACTIVE;
         }
-        if(!this.balance(query.entry_fee_usd) || !this.balance(query.prize_usd)){
+        if(!this.balance(query.entry_fee_usd_cents) || !this.balance(query.prize_usd_cents)){
             return MATCH_INPUT.OTHER;
         }
-        if(!this.player_balance_sufficient(player1.balance_usd_cents, query.entry_fee_usd)){
+        if(!this.player_balance_sufficient(player1.balance_usd_cents, query.entry_fee_usd_cents)){
             return MATCH_INPUT.INSUFFICIENT_BAL;
         }
-        if(!this.player_balance_sufficient(player2.balance_usd_cents, query.entry_fee_usd)){
+        if(!this.player_balance_sufficient(player2.balance_usd_cents, query.entry_fee_usd_cents)){
             return MATCH_INPUT.INSUFFICIENT_BAL;
         }
         
@@ -439,7 +444,7 @@ class Validator {
     }
 
     player_balance_sufficient(balance, entry_fee){
-        return (parseFloat(balance)/100 > parseFloat(entry_fee)) ? 1 : 0;
+        return (parseFloat(balance) > parseFloat(entry_fee)) ? 1 : 0;
     }
 
     points(value){
@@ -492,7 +497,7 @@ class Updater {
 
         if (query.join_match != undefined) {
             updates.num_join = (player.num_join) ? parseInt(player.num_join) + 1 : 1;
-            updates.balance_usd_cents = (parseFloat(player.balance_usd_cents) - parseFloat(query.entry_fee)).toFixed();
+            updates.balance_usd_cents = (parseInt(player.balance_usd_cents) - parseInt(query.entry_fee));
         }
         
         if (query.win != undefined){
@@ -500,7 +505,7 @@ class Updater {
             updates.in_active_match = null;
             player.num_lost = (player.num_lost) ? player.num_lost : 0;
             updates.efficiency = updates.num_won / (parseInt(player.num_lost) + updates.num_won);
-            updates.balance_usd_cents = (parseFloat(player.balance_usd_cents) + parseFloat(query.award_prize_usd)).toFixed();
+            updates.balance_usd_cents = (parseInt(player.balance_usd_cents) + parseInt(query.award_prize_usd));
         }
 
         if (query.lose != undefined) {
@@ -671,6 +676,7 @@ app.get('/player/:pid', async (req,res,next) => {
         } 
         else{
             res.writeHead(200);
+            console.log(player)
             res.write(JSON.stringify(decor.player(player), null, 2));
             res.end();
         }
@@ -806,7 +812,7 @@ app.post('/player/:pid', async (req,res,next) => {
 
 app.post('/deposit/player/:pid', async (req,res,next) => {
     // Invalide balance input
-    if(!v.balance(req.query.amount_usd)){
+    if(!v.balance(req.query.amount_usd_cents)){
         res.writeHead(400);
         res.end();
     }
@@ -815,7 +821,7 @@ app.post('/deposit/player/:pid', async (req,res,next) => {
         if(player != null){
             let old_balance = player.balance_usd_cents;
             // let deposit = decor.balance(req.query.amount_usd);
-            let deposit = parseFloat(req.query.amount_usd)*100;
+            let deposit = parseFloat(req.query.amount_usd_cents);
             let new_balance = parseFloat(deposit) + parseFloat(old_balance);
             new_balance = new_balance;
     
@@ -868,8 +874,8 @@ app.post('/match', async (req,res,next) => {
                 let name = await mongo.insert_value(COLLECTION.MATCH,mongo_player_input);
 
                 //update players
-                await updater.player({in_active_match:name.insertedId.toString(), join_match: true, entry_fee: req.query.entry_fee_usd},req.query.p1_id);
-                await updater.player({in_active_match:name.insertedId.toString(), join_match: true, entry_fee: req.query.entry_fee_usd},req.query.p2_id);
+                await updater.player({in_active_match:name.insertedId.toString(), join_match: true, entry_fee: req.query.entry_fee_usd_cents},req.query.p1_id);
+                await updater.player({in_active_match:name.insertedId.toString(), join_match: true, entry_fee: req.query.entry_fee_usd_cents},req.query.p2_id);
 
                 res.redirect(303, `/match/${name.insertedId.toString()}`);
                 res.end();
