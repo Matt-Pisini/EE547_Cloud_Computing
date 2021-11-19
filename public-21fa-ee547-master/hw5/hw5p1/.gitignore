@@ -1,0 +1,5 @@
+node_modules/*
+hw5p1.js
+data/
+package-lock.json
+report.json
