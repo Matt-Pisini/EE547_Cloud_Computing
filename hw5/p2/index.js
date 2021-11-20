@@ -78,15 +78,17 @@ class MongoDB {
 
     async player_deposit(context, pid, amount){
         try {
-            let balance = await context.loader.player.load(pid).then(data => data.balance_usd_cents);
+            let player = await context.loader.player.load(pid);
+            if(player == null) throw new Error(`No player with pid:${pid}`)
+            const {balance_usd_cents} = player;
             let {matchedCount} = await this.connection.collection(MONGO_COLLECTION.PLAYER)
-                .updateOne({_id: this.ObjectId(pid.toString())}, {$set:{balance_usd_cents: (amount + balance)}});
+                .updateOne({_id: this.ObjectId(pid.toString())}, {$set:{balance_usd_cents: (amount + balance_usd_cents)}});
             
-            if(matchedCount == 0) throw `Cannot update player with pid:${pid}`;
+            if(matchedCount == 0) throw new Error(`Cannot update player with pid:${pid}`);
             context.loader.player.clear(pid);
             
         } catch (err) {
-            console.log(err);
+            throw new Error(err);
         }
     }
     async update_player(context, pid, {lname, is_active}) {
@@ -98,18 +100,18 @@ class MongoDB {
 
             let {matchedCount} = await this.connection.collection(MONGO_COLLECTION.PLAYER)
                 .updateOne({_id: this.ObjectId(pid.toString())}, {$set:updates});
-            if(matchedCount == 0) throw `Cannot update player with pid:${pid}`;
+            if(matchedCount == 0) throw new Error(`Cannot update player with pid:${pid}`);
         } catch (err) {
-            console.log(err);
+            throw new Error(err);
         }
     }
     async add_player(context, {fname, lname, handed, initial_balance_usd_cents}) {
         try{
             const new_player = Object.create(DEFAULT_PLAYER_ATTR);
             if(v.name(fname))new_player.fname = fname;
-            else throw `${fname} is not a valid string`;
+            else throw new Error(`${fname} is not a valid string`);
             if(v.name(lname))new_player.lname = lname;
-            else throw `${lname} is not a valid string`;
+            else throw new Error(`${lname} is not a valid string`);
             if(initial_balance_usd_cents < 0) throw `Initial balance must be greater than 0`;
             new_player.handed = handed;
             new_player.balance_usd_cents = initial_balance_usd_cents;
@@ -117,7 +119,7 @@ class MongoDB {
 
             return this.connection.collection(MONGO_COLLECTION.PLAYER).insertOne(new_player);
         } catch(err){
-            console.log(err);
+            throw new Error(err);
         }
     }
     async delete_player(context, pid) {
@@ -127,18 +129,18 @@ class MongoDB {
         context.loader.player.clear(pid);
 
         if(deletedCount == 0){
-            throw new NotFoundError(`player_delete error -- pid:${pid}`);
+            throw new Error(`player_delete error -- pid:${pid}`);
         }
     }
     async add_match(context, pid_1, pid_2, entry_fee_usd_cents, prize_usd_cents) {
         try{
-            if(entry_fee_usd_cents < 0) throw `entry_fee_usd_cents must be greater than 0`;
-            if(prize_usd_cents < 0) throw `prize_usd_cents must be greater than 0`;
+            if(entry_fee_usd_cents < 0) throw new Error(`entry_fee_usd_cents must be greater than 0`);
+            if(prize_usd_cents < 0) throw new Error(`prize_usd_cents must be greater than 0`);
             if(await this.is_player_active(context, pid_1) || !(await this.is_balance_sufficient(context,pid_1,entry_fee_usd_cents) )){
-                throw "player 1 error";
+                throw new Error("player 1 error");
             } 
             if(await this.is_player_active(context, pid_2) || !(await this.is_balance_sufficient(context,pid_2,entry_fee_usd_cents) )){
-                throw "player 2 error";
+                throw new Error("player 2 error");
             }
             const new_match = Object.create(DEFAULT_MATCH_ATTR);
             new_match.entry_fee_usd_cents = entry_fee_usd_cents;
@@ -154,25 +156,33 @@ class MongoDB {
 
             return insertedId.toString();
         } catch(err){
-            console.log(err);
+            throw new Error(err)
         }
     }
     async match_points(context, mid, pid, points){
-        const {p1, p2} = await context.loader.match.load(mid);
-        if(pid == p1){
-            await this.connection.collection(MONGO_COLLECTION.MATCH).updateOne({_id: this.ObjectId(mid)}, {$inc:{p1_points: points}});
-            await this.player_add_field(context,pid,{total_points:points});
+        try {
+            const match = await context.loader.match.load(mid);
+            if(match == null) throw new Error(`no match with mid:${mid}`);
+            const {p1, p2} = match;
+            if(pid == p1){
+                await this.connection.collection(MONGO_COLLECTION.MATCH).updateOne({_id: this.ObjectId(mid)}, {$inc:{p1_points: points}});
+                await this.player_add_field(context,pid,{total_points:points});
+            }
+            else if (pid == p2){
+                await this.connection.collection(MONGO_COLLECTION.MATCH).updateOne({_id: this.ObjectId(mid)}, {$inc:{p1_points: points}});
+                await this.player_add_field(context,pid,{total_points:points});
+            }
+            else throw new Error(`no player matches pid:${pid}`);
+            await context.loader.match.clear(mid);
+        }catch(err){
+            throw new Error(err);
         }
-        else if (pid == p2){
-            await this.connection.collection(MONGO_COLLECTION.MATCH).updateOne({_id: this.ObjectId(mid)}, {$inc:{p1_points: points}});
-            await this.player_add_field(context,pid,{total_points:points});
-        }
-        else throw `no player matches pid:${pid}`
-        await context.loader.match.clear(mid);
     }
     async match_disqualify(context,mid,pid){
         try{
-            const {p1, p2,prize_usd_cents, is_active} = await context.loader.match.load(mid);
+            const match = await context.loader.match.load(mid);
+            if(match == null) throw new Error(`No match with mid:${mid}`)
+            const {p1, p2,prize_usd_cents, is_active} = match;
             let winner = null; 
             let loser = null;
             // console.log(pid)
@@ -195,15 +205,17 @@ class MongoDB {
             await this.players_end_match(context, loser, winner, prize_usd_cents, true);
             await this.match_change_field(context,mid,update);
         } catch(err){
-            console.log(err);
+            throw new Error(err);
         }
     }
     async match_end(context, mid){
         try{
-            const {p1, p1_points, p2, p2_points, prize_usd_cents, is_active} = await context.loader.match.load(mid);
+            const match = await context.loader.match.load(mid);
+            if(match == null) throw new Error(`No match with mid:${mid}`)
+            const {p1, p1_points, p2, p2_points, prize_usd_cents, is_active} = match;
             let winner = null;
             let loser = null;
-            if(!is_active) throw `Match ${mid} has already ended`;
+            if(!is_active) throw new Error(`Match ${mid} has already ended`);
             if(p1_points == p2_points) throw `Can't end match in tie`;
             else if (p1_points < p2_points) {
                 winner = p2;
@@ -219,7 +231,7 @@ class MongoDB {
             await this.players_end_match(context,loser, winner, prize_usd_cents, false);
             await this.match_change_field(context,mid,update);
         } catch(err){
-            console.log(err);
+            throw new Error(err);
         }
     }
 
@@ -253,8 +265,13 @@ class MongoDB {
         await context.loader.match.clear(mid);
     }
     async is_player_active(context, pid){
+        try{
         const {in_active_match, is_active} = await context.loader.player.load(pid);
         return (in_active_match || !is_active) ? true : false;
+        } catch(err){
+            throw new Error(err)
+        }
+
     }
     async is_balance_sufficient(context, pid, cost){
         const {balance_usd_cents} = await context.loader.player.load(pid);
@@ -445,7 +462,7 @@ const resolvers = {
         },
         winner: ({ mid }, _, context) => {
           return context.loader.match.load(mid)
-          .then(data => {return {pid:data.winner}});
+          .then(data => {return (data.winner) ? {pid:data.winner} : null});
         }
       },
 }
